@@ -16,15 +16,14 @@ def recever(client_socket):
             break
 
 def writer(client_socket):
-    data = input()
-    if data:
-        if data == 'exit':
-            return False
-        else:
-            client_socket.sendall(str.encode(data))
-            return True
-    else:
-        return True
+    while True:
+        data = input()
+        if data:
+            if data == 'exit':
+                break
+            else:
+                client_socket.sendall(str.encode(data))
+
 
 
 
@@ -37,8 +36,7 @@ t = Thread(target=recever, args=(client_socket,))
 t.daemon = True
 t.start()
 
-while writer(client_socket):
-    pass
+writer(client_socket)
 
 print('The client is closed.')
 client_socket.close()

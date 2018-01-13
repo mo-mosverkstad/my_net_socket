@@ -7,20 +7,19 @@ def recever_server(client_socket):
         try:
             data = client_socket.recv(MAX_BUFFER_SIZE)
             if data: print(f'{data}')
-            else: break
+            else:
+                print('The client has been closed.')
+                break
         except Exception:
+            print('The client has been closed.')
             break
 
 def writer_server(client_socket):
-    new_data = input()
-    if new_data:
-        if new_data == 'exit':
-            return False
-        else:
-            client_socket.sendall(str.encode(new_data))
-            return True
-    else:
-        return True
+    while True:
+        new_data = input()
+        if new_data:
+            if new_data == 'exit': break
+            else: client_socket.sendall(str.encode(new_data))
 
 MAX_CLIENT_NUMBER = 1
 MAX_BUFFER_SIZE = 1024
@@ -38,8 +37,7 @@ print(f'The client has been connected, the client address is {client_address}')
 t = Thread(target=recever_server, args=(client_socket,))
 t.daemon = True
 t.start()
-while writer_server(client_socket):
-    pass
+writer_server(client_socket)
 
 print('The client socket is closed by server.')
 client_socket.close()
