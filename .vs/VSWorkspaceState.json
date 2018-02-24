@@ -2,8 +2,9 @@
   "ExpandedNodes": [
     "",
     "\\echo",
+    "\\echo2",
     "\\talk_one_to_one"
   ],
-  "SelectedNode": "\\talk_one_to_one\\talk2_server.py",
+  "SelectedNode": "\\echo2\\echo2_clinet.py",
   "PreviewInSolutionExplorer": false
 }
