@@ -1,10 +1,13 @@
 {
   "ExpandedNodes": [
     "",
+    "\\ask_weather",
+    "\\ask_weather_from_internet",
+    "\\base",
     "\\echo",
     "\\echo2",
     "\\talk_one_to_one"
   ],
-  "SelectedNode": "\\echo2\\echo2_clinet.py",
+  "SelectedNode": "\\ask_weather_from_internet\\base_constant.py",
   "PreviewInSolutionExplorer": false
 }

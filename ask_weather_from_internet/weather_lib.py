@@ -60,4 +60,6 @@ def difference_between_two_days(date_string):
 
 
 def get_weather(data):
-    return gen_weather_dict()[difference_between_two_days(data)]
+    index = difference_between_two_days(data)
+    if index >= 0 and index < 3: return gen_weather_dict()[index]
+    else: return "No data on " + data
