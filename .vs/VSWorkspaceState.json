@@ -1,13 +1,9 @@
 {
   "ExpandedNodes": [
     "",
-    "\\ask_weather",
-    "\\ask_weather_from_internet",
-    "\\base",
-    "\\echo",
-    "\\echo2",
+    "\\base_multi_clients",
     "\\talk_one_to_one"
   ],
-  "SelectedNode": "\\ask_weather_from_internet\\base_constant.py",
+  "SelectedNode": "\\base_multi_clients\\base_server.py",
   "PreviewInSolutionExplorer": false
 }
