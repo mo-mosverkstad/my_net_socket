@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "ProjectMap": {
+    "5bb36c68-2408-4727-b1c2-3e1dc50e26fb": {
+      "ProjectGuid": "5bb36c68-2408-4727-b1c2-3e1dc50e26fb",
+      "DisplayName": "PythonTcpServer",
+      "ColorIndex": 0
+    }
+  },
+  "NextColorIndex": 1
+}

@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "ProjectMap": {
+    "a196d492-e683-431c-9993-71a909fe2752": {
+      "ProjectGuid": "a196d492-e683-431c-9993-71a909fe2752",
+      "DisplayName": "PythonTcpClient",
+      "ColorIndex": 0
+    }
+  },
+  "NextColorIndex": 1
+}
