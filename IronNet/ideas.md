@@ -1,3 +1,17 @@
+I would like to write some software myself to simulate and learn network security knowledge, such as network attacks, network defense, penetration testing, and related topics. In order not to impact real production network environments, I plan to conduct my research by developing software on WSL Ubuntu.
+
+First, I want to build a network routing protocol stack. This stack will implement Layer 2, Layer 3 (IP), and Layer 4 (TCP and UDP), and provide interfaces for upper-layer applications. It will also include configuration interfaces that allow real-time configuration changes with immediate effect. In addition, the system will provide performance monitoring interfaces so that performance status can be observed in real time. The configuration system should support IP interfaces, IPsec, IP routing, ACLs, PBR, and similar features.
+
+Second, based on this network protocol stack, I plan to develop a small application that runs on top of it.
+
+Third, I want to create a set of network scanning, penetration testing, and attack simulation tools specifically designed to target this protocol stack and the small application. These tools will be able to simulate currently popular network attack techniques in order to test the protocol stack and application.
+
+Fourth, additional supporting software may also be required.
+
+For all of this software, I would like to use C or C++ for implementation. Could you help me create a plan describing how to design these pieces of software, what kinds of network security tests could be performed, and provide a detailed design? Ideally, a design blueprint would be included to facilitate later development and testing.
+
+---
+
 Great question — the name **IronNet** was chosen as a **conceptual, symbolic name**, not because it is a standard abbreviation. That said, it *can* be interpreted meaningfully, and that’s actually part of why it works well for a serious network‑security research project.
 
 Below is a clear explanation.
