@@ -16,19 +16,25 @@ This document provides a concrete, step-by-step implementation plan for the Iron
 
 1. **Initialize project structure**
    ```
-   ironnet/
-   ├── CMakeLists.txt
-   ├── common/          # Shared utilities
-   ├── ironstack/       # Core protocol stack
-   ├── ironctl/         # CLI / configuration
-   ├── ironmon/         # Telemetry & metrics
-   ├── ironapps/        # Target applications
-   ├── ironfuzz/        # Fuzzing framework
-   ├── ironprobe/       # Network scanner
-   ├── ironload/        # Stress tester
-   ├── ironsim/         # Network emulator
-   ├── irontrace/       # Packet capture/replay
-   └── tests/           # Unit & regression tests
+   IronNet/
+   ├── ideas.md            # Project vision & design notes
+   ├── study.md            # Implementation plan & architecture
+   ├── build.md            # Build & test instructions
+   ├── todo.md             # Task tracking
+   ├── build/              # Build output (out-of-source)
+   └── src/                # All source code
+       ├── CMakeLists.txt
+       ├── common/          # Shared utilities
+       ├── ironstack/       # Core protocol stack
+       ├── ironctl/         # CLI / configuration
+       ├── ironmon/         # Telemetry & metrics
+       ├── ironapps/        # Target applications
+       ├── ironfuzz/        # Fuzzing framework
+       ├── ironprobe/       # Network scanner
+       ├── ironload/        # Stress tester
+       ├── ironsim/         # Network emulator
+       ├── irontrace/       # Packet capture/replay
+       └── tests/           # Unit & regression tests
    ```
 
 2. **CMake build system**
@@ -950,50 +956,32 @@ Legend:
 ### File System Layout (Deployed)
 
 ```
-~/ironnet/
-├── src/                          # Source code
+IronNet/
+├── ideas.md                      # Project vision & design
+├── study.md                      # Implementation plan & architecture
+├── build.md                      # Build & test instructions
+├── todo.md                       # Task tracking
+│
+├── src/                          # All source code
 │   ├── CMakeLists.txt
-│   ├── common/
-│   ├── ironstack/
-│   ├── ironctl/
-│   ├── ironmon/
-│   ├── ironapps/
-│   ├── ironfuzz/
-│   ├── ironprobe/
-│   ├── ironload/
-│   ├── ironsim/
-│   └── irontrace/
+│   ├── common/                   # Shared utilities
+│   ├── ironstack/                # Core protocol stack
+│   ├── ironctl/                  # CLI / configuration
+│   ├── ironmon/                  # Telemetry & metrics
+│   ├── ironapps/                 # Target applications
+│   ├── ironfuzz/                 # Fuzzing framework
+│   │   └── corpus/              # Fuzz seeds & crashes
+│   ├── ironprobe/                # Network scanner
+│   ├── ironload/                 # Stress tester
+│   ├── ironsim/                  # Network emulator
+│   ├── irontrace/                # Packet capture/replay
+│   └── tests/                    # Test infrastructure
+│       ├── unit/                 # Per-module unit tests
+│       ├── regression/           # Replay-based regression
+│       └── stress/               # Load test scripts
 │
-├── build/                        # Build output
-│   ├── debug/                    # ASAN-enabled binaries
-│   │   ├── ironstack
-│   │   ├── ironctl
-│   │   ├── ironfuzz
-│   │   ├── ironprobe
-│   │   └── ironload
-│   └── release/                  # Optimized binaries
-│
-├── tests/                        # Test infrastructure
-│   ├── unit/                     # Per-module unit tests
-│   ├── regression/               # Replay-based regression
-│   └── stress/                   # Load test scripts
-│
-├── corpus/                       # Fuzzing data
-│   ├── seeds/                    # Initial seed packets
-│   ├── crashes/                  # Crash-inducing inputs
-│   └── coverage/                 # Coverage reports
-│
-├── traces/                       # Packet captures
-│   ├── captures/                 # Raw packet recordings
-│   └── replays/                  # Regression replay files
-│
-├── configs/                      # Topology & config files
-│   ├── single_node.conf
-│   ├── three_node_linear.conf
-│   └── acl_test_rules.conf
-│
-└── docs/                         # Documentation
-    ├── architecture.md
-    ├── invariants.md
-    └── experiment_log.md
+└── build/                        # Build output (out-of-source, generated)
+    ├── ironstack/                # ironstack binary
+    ├── tests/                    # Test binaries
+    └── common/                   # libiron_common.a
 ```

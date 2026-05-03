@@ -1,0 +1,34 @@
+# Build output
+build/
+build-release/
+
+# IDE
+.vscode/
+.idea/
+*.pyproj
+*.sln
+*.suo
+*.user
+
+# Compiled objects
+*.o
+*.a
+*.so
+*.exe
+
+# CMake generated
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Fuzzing artifacts
+src/ironfuzz/corpus/crashes/
+src/ironfuzz/corpus/coverage/
+
+# Traces
+traces/
