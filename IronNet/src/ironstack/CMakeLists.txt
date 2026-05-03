@@ -11,6 +11,7 @@ add_executable(ironstack
     l3/pbr.c
     l4/udp.c
     l4/tcp.c
+    security/ipsec.c
 )
 
 target_include_directories(ironstack PRIVATE

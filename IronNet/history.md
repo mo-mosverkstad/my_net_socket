@@ -1175,3 +1175,173 @@ ioctl(fd, TUNSETIFF, &ifr);
 - `IFF_NO_PI` → don't prepend extra packet info header
 
 So even though we open `/dev/net/tun`, the `IFF_TAP` flag tells the kernel to create a TAP device. The filename is a bit confusing — it's just how Linux designed the API.
+
+---
+
+## Phase 6: IPsec (Simulated)
+
+### What was done
+
+We implemented a simulated IPsec (Internet Protocol Security) subsystem that exercises the **control flow** of real IPsec without using actual cryptography. The focus is on:
+- Security Association (SA) lifecycle management
+- Policy-based enforcement decisions
+- Fail-open vs fail-closed behavior
+- SA expiry and resource management
+
+### Concepts explained
+
+**IPsec** is a framework for securing IP communications by authenticating and/or encrypting each IP packet. In real networks, IPsec uses algorithms like AES, SHA-256, etc. In IronNet, we use a **dummy XOR transform** — this is intentional because:
+- It exercises the same control flow (policy lookup → SA lookup → transform → forward)
+- It's reversible (XOR is its own inverse), making testing easy
+- It avoids the complexity of real crypto libraries while still demonstrating the architecture
+
+**Key IPsec concepts:**
+
+**Security Association (SA):**
+- A one-way agreement between two endpoints about how to protect traffic
+- Identified by a **SPI (Security Parameter Index)** — a 32-bit number
+- Contains: transform algorithm, key, direction (inbound/outbound)
+- Has a lifetime — expires after a configured duration
+
+**Security Policy:**
+- Rules that determine what to do with traffic matching certain criteria
+- Three possible actions:
+  - `PROTECT` — encrypt/authenticate using a specific SA
+  - `BYPASS` — let traffic pass without protection
+  - `DISCARD` — drop the traffic
+
+**Fail-closed vs fail-open:**
+- **Fail-closed** (what IronNet implements): if policy says PROTECT but the SA is missing or expired, the packet is **dropped**. This is the secure default.
+- **Fail-open** (dangerous): if SA is missing, let the packet through unprotected. This can leak sensitive data.
+
+**SA Lifetime:**
+- SAs don't last forever — they expire after a configured time (3600 seconds in IronNet)
+- `ipsec_timer_tick()` checks all SAs and deactivates expired ones
+- If a policy references an expired SA, traffic is dropped (fail-closed)
+
+### Files created
+
+#### `src/ironstack/security/ipsec.h` — IPsec interface
+
+Defines:
+- `ipsec_sa_t` — SA entry: SPI, src/dst IP, transform, key, direction, timestamps, counters
+- `ipsec_policy_t` — policy entry: src/dst prefix, protocol, direction, action, SA reference
+- `ipsec_direction_t` — INBOUND or OUTBOUND
+- `ipsec_policy_action_t` — PROTECT, BYPASS, or DISCARD
+- Transform constants: `IPSEC_TRANSFORM_NONE`, `IPSEC_TRANSFORM_XOR`
+
+API:
+- `ipsec_init()` — initialize SA and policy databases
+- `ipsec_sa_add(spi, src, dst, dir, transform, key)` — create an SA
+- `ipsec_sa_delete(spi)` — remove an SA
+- `ipsec_sa_find(spi)` — lookup by SPI
+- `ipsec_policy_add(src, dst, proto, dir, action, sa_spi)` — add a policy
+- `ipsec_outbound(src, dst, proto, payload, len)` — apply outbound policy (encrypt)
+- `ipsec_inbound(src, dst, proto, payload, len)` — apply inbound policy (decrypt)
+- `ipsec_timer_tick()` — expire old SAs
+- `ipsec_dump()` — print SA and policy databases
+
+#### `src/ironstack/security/ipsec.c` — IPsec implementation
+
+**ipsec_outbound() / ipsec_inbound() flow:**
+```
+1. Look up matching policy (by src/dst IP, protocol, direction)
+2. If no policy → implicit bypass (return 0)
+3. If policy action = BYPASS → return 0
+4. If policy action = DISCARD → return -1 (drop)
+5. If policy action = PROTECT:
+   a. Find SA by SPI
+   b. If SA not found → return -1 (fail closed)
+   c. Apply transform (XOR payload with key byte)
+   d. Update SA counters (packets, bytes)
+   e. Return 0
+```
+
+**ipsec_apply_transform():**
+```c
+if (transform == IPSEC_TRANSFORM_XOR) {
+    for each byte in payload:
+        payload[i] ^= key;
+}
+sa->bytes_processed += len;
+sa->packets_processed++;
+```
+
+Since XOR is its own inverse, the same function works for both encrypt and decrypt.
+
+**ipsec_timer_tick():**
+```
+for each active SA:
+    if (now - created_at) >= IPSEC_SA_LIFETIME:
+        deactivate SA
+        log expiry with packet/byte counts
+```
+
+### Tests created
+
+#### `src/tests/unit/test_ipsec.c` — IPsec unit tests (5 tests)
+
+- `test_sa_add_find_delete` — create SA, find by SPI, delete, verify gone
+- `test_outbound_protect` — XOR transform applied: 0x01→0xFE, 0x02→0xFD (key=0xFF)
+- `test_inbound_decrypt` — XOR reversal: 0xFE→0x01, 0xFD→0x02 (key=0xFF)
+- `test_discard_policy` — DISCARD action returns -1
+- `test_fail_closed_no_sa` — PROTECT policy with missing SA returns -1
+
+#### `src/tests/module/test_ipsec_module.c` — IPsec module test (4 test cases)
+
+**Test 1: Encrypt/decrypt roundtrip**
+- Original: "Hello IronNet!" (hex: 48 65 6C 6C 6F 20 49 72 6F 6E 4E 65 74 21)
+- After encrypt (XOR 0xAB): E3 CE C7 C7 C4 8B E2 D9 C4 C5 E5 CE DF 8A
+- After decrypt (XOR 0xAB again): 48 65 6C 6C 6F 20 49 72 6F 6E 4E 65 74 21
+- Recovered: "Hello IronNet!" — roundtrip verified
+
+**Test 2: DISCARD policy drops traffic**
+- Policy: DISCARD all outbound from 10.0.1.0/24
+- Packet from 10.0.1.5 → DISCARDED
+- Packet from 10.0.3.1 (no matching policy) → BYPASSED
+
+**Test 3: Fail closed (PROTECT but no SA)**
+- Policy says PROTECT with SPI=0x999, but no SA exists
+- Result: DROPPED (fail closed)
+- Data is NOT modified (transform never applied)
+
+**Test 4: SA expiry via timer**
+- Create SA with SPI=0x400
+- Backdate `created_at` to simulate lifetime exceeded
+- Call `ipsec_timer_tick()` → SA expired and deactivated
+- `ipsec_sa_find(0x400)` returns NULL
+
+### Design decisions
+
+1. **Dummy crypto (XOR)** — Real crypto would add library dependencies and complexity without teaching anything about IPsec architecture. XOR exercises the same code paths.
+
+2. **Fail-closed** — This is the secure default. If something goes wrong (SA missing, expired, or deleted), traffic is dropped rather than sent unprotected.
+
+3. **Separate inbound/outbound** — Real IPsec has different SA databases for each direction. IronNet models this with a direction field on both SAs and policies.
+
+4. **Not yet integrated into IP forwarding path** — IPsec is currently a standalone module with its own API. Integration into `ip.c` (calling `ipsec_outbound()` before forwarding and `ipsec_inbound()` on local delivery) is straightforward but left for when the full pipeline is exercised end-to-end.
+
+### Current test summary
+
+After Phase 6, the project has:
+- **6 unit tests**: test_stats, test_eth, test_route, test_acl, test_tcp, test_ipsec
+- **5 module tests**: test_l2_module, test_l3_module, test_pbr_acl_module, test_l4_module, test_ipsec_module
+- **Total: 11 tests, all passing**
+
+### How to run Phase 6 tests
+
+```bash
+cd IronNet/build
+
+# All tests
+ctest --output-on-failure
+
+# IPsec unit test
+./tests/test_ipsec
+
+# IPsec module test (verbose)
+./tests/test_ipsec_module
+
+# All module tests via script
+../src/tests/run_module_tests.sh .
+```

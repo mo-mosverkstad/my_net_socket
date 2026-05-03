@@ -30,6 +30,13 @@ target_include_directories(test_tcp PRIVATE
 )
 target_link_libraries(test_tcp iron_common)
 
+add_executable(test_ipsec unit/test_ipsec.c)
+target_include_directories(test_ipsec PRIVATE
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+)
+target_link_libraries(test_ipsec iron_common)
+
 # Module tests
 add_executable(test_l2_module module/test_l2_module.c)
 target_include_directories(test_l2_module PRIVATE
@@ -63,6 +70,14 @@ target_include_directories(test_l4_module PRIVATE
 )
 target_link_libraries(test_l4_module iron_common)
 
+add_executable(test_ipsec_module module/test_ipsec_module.c)
+target_include_directories(test_ipsec_module PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/module
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+)
+target_link_libraries(test_ipsec_module iron_common)
+
 enable_testing()
 
 # Unit tests
@@ -71,9 +86,11 @@ add_test(NAME test_eth COMMAND test_eth)
 add_test(NAME test_route COMMAND test_route)
 add_test(NAME test_acl COMMAND test_acl)
 add_test(NAME test_tcp COMMAND test_tcp)
+add_test(NAME test_ipsec COMMAND test_ipsec)
 
 # Module tests
 add_test(NAME module_l2 COMMAND test_l2_module)
 add_test(NAME module_l3 COMMAND test_l3_module)
 add_test(NAME module_pbr_acl COMMAND test_pbr_acl_module)
 add_test(NAME module_l4 COMMAND test_l4_module)
+add_test(NAME module_ipsec COMMAND test_ipsec_module)
