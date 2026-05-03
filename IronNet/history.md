@@ -565,3 +565,234 @@ ctest --output-on-failure
 ### What's next
 
 Phase 4: ACL & PBR engines — packet filtering and policy-based routing.
+
+---
+
+## Phase 4: ACL & PBR Engines
+
+### What was done
+
+We implemented two packet filtering/routing engines:
+- **PBR (Policy-Based Routing)** — overrides normal routing based on packet attributes
+- **ACL (Access Control List)** — permits or denies packets based on match criteria
+
+These are integrated into the IP forwarding path in **vendor-standard order**:
+
+```
+PBR (highest priority) → ACL (output filter) → FIB/Static Routing (fallback)
+```
+
+This means:
+1. PBR is checked first — if a policy matches, it overrides the routing decision
+2. ACL is applied on the output path — after the routing decision is made, ACL decides whether to permit or deny
+3. FIB (static routing) is the fallback — only used if no PBR rule matches
+
+### Concepts explained
+
+**ACL (Access Control List)**
+
+An ACL is an ordered list of rules. Each rule says "if a packet matches these criteria, PERMIT or DENY it." Rules are evaluated **top-down, first-match wins** — the first rule that matches determines the outcome.
+
+```
+Rule 1: PERMIT TCP dst-port 80    ← checked first
+Rule 2: DENY TCP any              ← checked second
+Default: DENY                      ← if nothing matches
+```
+
+A packet going to TCP port 80 hits Rule 1 (PERMIT). A packet going to TCP port 443 skips Rule 1, hits Rule 2 (DENY).
+
+Match criteria:
+- Source IP prefix (e.g., 10.0.1.0/24 or "any")
+- Destination IP prefix
+- Protocol (TCP, UDP, ICMP, or any)
+- Source port range
+- Destination port range
+
+**PBR (Policy-Based Routing)**
+
+Normal routing uses the FIB (Forwarding Information Base) which only looks at the destination IP. PBR can override this based on **source IP, destination IP, and protocol** — allowing you to send traffic from different sources through different paths.
+
+Example: "All traffic from 10.0.1.0/24 should go through interface 1 instead of the normal route via interface 0."
+
+**Why PBR has higher priority than ACL:**
+
+In real network equipment (Cisco, Juniper), PBR is evaluated before ACL because:
+- PBR decides the **path** (where the packet goes)
+- ACL decides the **permission** (whether the packet is allowed on that path)
+
+The packet must first know where it's going before you can decide if it's allowed there.
+
+**Loop detection:**
+
+PBR can accidentally create routing loops if misconfigured. The implementation tracks which next-hops a packet has already visited. If a PBR rule would send a packet to a hop it has already seen, the packet is dropped.
+
+### Files created
+
+#### `src/ironstack/l3/acl.h` — ACL interface
+
+Defines:
+- `acl_action_t` — PERMIT or DENY
+- `acl_match_t` — match criteria (src/dst IP prefix, protocol, src/dst port range)
+- `acl_rule_t` — a complete rule (ID, match, action, hit counter)
+- `acl_default_policy_t` — what to do when no rule matches (PERMIT or DENY)
+
+API:
+- `acl_init(default_policy)` — initialize with default permit or deny
+- `acl_add_rule(id, match, action)` — add a rule (appended to end = lowest priority)
+- `acl_delete_rule(id)` — remove a rule
+- `acl_evaluate(src_ip, dst_ip, protocol, src_port, dst_port)` — returns PERMIT or DENY
+- `acl_dump()` — print all rules and hit counts
+
+#### `src/ironstack/l3/acl.c` — ACL implementation
+
+Key logic in `acl_evaluate()`:
+```c
+for each rule (top to bottom):
+    if rule matches packet:
+        increment hit counter
+        if DENY: increment STAT_L3_DROPS_ACL
+        return rule's action
+// No rule matched:
+return default policy
+```
+
+Matching uses `iron_ip_matches()` from utils.h for IP prefix comparison, and `port_matches()` for port range checking. A port range of {0, 0} means "any port."
+
+#### `src/ironstack/l3/pbr.h` — PBR interface
+
+Defines:
+- `pbr_match_t` — match criteria (src/dst IP prefix, protocol)
+- `pbr_action_t` — what to do (next_hop IP, output interface)
+- `pbr_rule_t` — a complete rule (ID, match, action, hit counter)
+- `pkt_context_t` — per-packet state tracking (ACL checked flag, hop history for loop detection)
+
+API:
+- `pbr_init()` — initialize
+- `pbr_add_rule(id, match, action)` — add a PBR policy
+- `pbr_delete_rule(id)` — remove a policy
+- `pbr_lookup(src_ip, dst_ip, protocol, ctx, *next_hop, *out_iface)` — returns 0 if matched, -1 if no match, -2 if loop detected
+- `pkt_context_init(ctx)` — initialize packet context
+- `route_seen_hop(ctx, hop)` — check if hop was already visited
+
+#### `src/ironstack/l3/pbr.c` — PBR implementation
+
+Key logic in `pbr_lookup()`:
+```c
+// Invariant check
+if (!ctx->acl_checked) → error (should not happen in vendor-standard order)
+
+for each rule:
+    if rule matches (src_ip, dst_ip, protocol):
+        if next_hop already in hop_history → return -2 (LOOP)
+        add next_hop to hop_history
+        increment hit counter
+        set *next_hop and *out_iface
+        return 0 (matched)
+
+return -1 (no match, fall through to FIB)
+```
+
+### Integration into IP forwarding path
+
+In `ip.c`, the forwarding section now follows vendor-standard order:
+
+```c
+/* Step 1: PBR lookup (highest priority) */
+int pbr_rc = pbr_lookup(src_ip, dst_ip, protocol, &ctx, &next_hop, &out_iface);
+
+if (pbr_rc == -2) → drop (loop detected)
+
+if (pbr_rc != 0) {
+    /* Step 3: No PBR match, fall through to FIB (static routing) */
+    if (route_lookup(dst_ip, &next_hop, &out_iface) != 0) → drop (no route)
+}
+
+/* Step 2: ACL check (applied on output path after routing decision) */
+if (acl_evaluate(src_ip, dst_ip, protocol, sport, dport) == ACL_DENY) → drop
+```
+
+The full forwarding pipeline is now:
+```
+IP Validation → TTL decrement → PBR → ACL → FIB (fallback) → L2 TX
+```
+
+### Refactoring: shared helpers moved to utils.h
+
+During this phase, `prefix_mask()` and `ip_matches()` were duplicated in route.c, acl.c, and pbr.c. When module tests included all .c files together, this caused redefinition errors.
+
+Solution: moved to `common/utils.h` as shared inline functions:
+- `iron_prefix_mask(prefix_len)` — compute subnet mask from prefix length
+- `iron_ip_matches(ip, prefix_addr, prefix_len)` — check if IP belongs to a prefix
+
+All three modules now use these shared helpers.
+
+### Tests created
+
+#### `src/tests/unit/test_acl.c` — ACL unit tests (5 tests)
+
+- `test_default_deny` — no rules, default=DENY → packet denied
+- `test_default_permit` — no rules, default=PERMIT → packet permitted
+- `test_permit_rule` — TCP port 80 permitted, UDP port 80 denied (protocol mismatch)
+- `test_deny_rule` — traffic to 10.0.2.0/24 denied, traffic to 10.0.3.0/24 permitted
+- `test_first_match_wins` — Rule 1 permits port 80, Rule 2 denies all TCP → port 80 permitted, port 443 denied
+
+#### `src/tests/module/test_pbr_acl_module.c` — PBR & ACL module test (4 test cases)
+
+**Test 1: PBR redirects traffic to different interface**
+- Normal route: 10.0.2.0/24 via iface 0
+- PBR rule: src 10.0.1.0/24 → redirect to iface 1
+- Packet from 10.0.1.5 → 10.0.2.1
+- Result: forwarded via iface 1 (PBR overrides normal route)
+
+**Test 2: PBR loop detection**
+- PBR rule matches all traffic → next_hop 10.0.5.1
+- First lookup succeeds (hop added to history)
+- Second lookup with same context → loop detected (rc=-2)
+
+**Test 3: ACL denies SSH traffic (port 22)**
+- Route exists, ACL rule: DENY TCP dst-port 22
+- Packet: 10.0.1.1:5000 → 10.0.2.1:22
+- Result: denied by ACL, not forwarded, drop counter incremented
+
+**Test 4: ACL permits HTTP traffic (port 80)**
+- Default policy: DENY, ACL rule: PERMIT TCP dst-port 80
+- Packet: 10.0.1.1:5000 → 10.0.2.1:80
+- Result: permitted and forwarded
+
+### Pipeline initialization update
+
+`pipeline.c` now initializes ACL and PBR:
+```c
+int iron_pipeline_init(void) {
+    vnic_init();
+    route_init();
+    acl_init(ACL_DEFAULT_PERMIT);
+    pbr_init();
+    ...
+}
+```
+
+### Current test summary
+
+After Phase 4, the project has:
+- **4 unit tests**: test_stats, test_eth, test_route, test_acl
+- **3 module tests**: test_l2_module, test_l3_module, test_pbr_acl_module
+- **Total: 7 tests, all passing**
+
+### How to run Phase 4 tests
+
+```bash
+cd IronNet/build
+
+# All tests
+ctest --output-on-failure
+
+# PBR & ACL module test (verbose)
+./tests/test_pbr_acl_module
+
+# ACL unit test
+./tests/test_acl
+
+# All module tests via script
+../src/tests/run_module_tests.sh .
+```

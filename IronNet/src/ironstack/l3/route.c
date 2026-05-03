@@ -51,11 +51,6 @@ int route_delete(ip_prefix_t prefix) {
     return -1;
 }
 
-static uint32_t prefix_mask(uint8_t prefix_len) {
-    if (prefix_len == 0) return 0;
-    return iron_htonl(0xFFFFFFFF << (32 - prefix_len));
-}
-
 int route_lookup(uint32_t dst_ip, uint32_t *next_hop, int *out_iface) {
     int best_idx = -1;
     uint8_t best_prefix_len = 0;
@@ -63,8 +58,7 @@ int route_lookup(uint32_t dst_ip, uint32_t *next_hop, int *out_iface) {
     for (int i = 0; i < g_route_count; i++) {
         if (!g_routes[i].active) continue;
 
-        uint32_t mask = prefix_mask(g_routes[i].prefix.prefix_len);
-        if ((dst_ip & mask) == (g_routes[i].prefix.addr & mask)) {
+        if (iron_ip_matches(dst_ip, g_routes[i].prefix.addr, g_routes[i].prefix.prefix_len)) {
             if (g_routes[i].prefix.prefix_len >= best_prefix_len) {
                 best_prefix_len = g_routes[i].prefix.prefix_len;
                 best_idx = i;

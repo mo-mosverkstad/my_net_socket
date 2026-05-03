@@ -1,5 +1,7 @@
 #include "ip.h"
 #include "route.h"
+#include "acl.h"
+#include "pbr.h"
 #include "icmp.h"
 #include "log.h"
 #include "stats.h"
@@ -106,12 +108,42 @@ int ip_input(uint8_t *data, int len, int iface_idx) {
     hdr->checksum = 0;
     hdr->checksum = iron_checksum(data, hdr_len);
 
-    /* Route lookup */
+    /* Extract ports for ACL */
+    uint16_t sport = 0, dport = 0;
+    if ((hdr->protocol == PROTO_TCP || hdr->protocol == PROTO_UDP) && payload_len >= 4) {
+        sport = (payload[0] << 8) | payload[1];
+        dport = (payload[2] << 8) | payload[3];
+    }
+
+    /* Step 1: PBR lookup (highest priority) */
+    pkt_context_t ctx;
+    pkt_context_init(&ctx);
+    ctx.acl_checked = true;
+
     uint32_t next_hop;
     int out_iface;
-    if (route_lookup(hdr->dst_ip, &next_hop, &out_iface) != 0) {
-        LOG_DBG(MODULE, "No route to host");
+    int pbr_rc = pbr_lookup(hdr->src_ip, hdr->dst_ip, hdr->protocol,
+                            &ctx, &next_hop, &out_iface);
+
+    if (pbr_rc == -2) {
+        /* PBR loop detected */
         iron_stats_increment(STAT_L3_DROPS_NO_ROUTE);
+        return -1;
+    }
+
+    if (pbr_rc != 0) {
+        /* Step 3: No PBR match, fall through to FIB (static routing) */
+        if (route_lookup(hdr->dst_ip, &next_hop, &out_iface) != 0) {
+            LOG_DBG(MODULE, "No route to host");
+            iron_stats_increment(STAT_L3_DROPS_NO_ROUTE);
+            return -1;
+        }
+    }
+
+    /* Step 2: ACL check (applied on the output path after routing decision) */
+    acl_action_t acl_result = acl_evaluate(hdr->src_ip, hdr->dst_ip,
+                                           hdr->protocol, sport, dport);
+    if (acl_result == ACL_DENY) {
         return -1;
     }
 

@@ -4,6 +4,8 @@
 #include "../io/vnic.h"
 #include "../l2/eth.h"
 #include "../l3/route.h"
+#include "../l3/acl.h"
+#include "../l3/pbr.h"
 
 #include <unistd.h>
 
@@ -15,6 +17,8 @@ static uint8_t rx_buf[RX_BUF_SIZE];
 int iron_pipeline_init(void) {
     if (vnic_init() != 0) return -1;
     if (route_init() != 0) return -1;
+    if (acl_init(ACL_DEFAULT_PERMIT) != 0) return -1;
+    if (pbr_init() != 0) return -1;
     LOG_INF(MODULE, "Pipeline initialized");
     return 0;
 }

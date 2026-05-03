@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 #include <arpa/inet.h>
 #include <string.h>
 
@@ -45,6 +46,19 @@ static inline uint16_t iron_checksum(const void *data, size_t len) {
 /* Safe memory zero */
 static inline void iron_memzero(void *ptr, size_t len) {
     memset(ptr, 0, len);
+}
+
+/* Prefix mask from prefix length */
+static inline uint32_t iron_prefix_mask(uint8_t prefix_len) {
+    if (prefix_len == 0) return 0;
+    return htonl(0xFFFFFFFF << (32 - prefix_len));
+}
+
+/* Check if IP matches a prefix */
+static inline bool iron_ip_matches(uint32_t ip, uint32_t prefix_addr, uint8_t prefix_len) {
+    if (prefix_len == 0) return true;
+    uint32_t mask = iron_prefix_mask(prefix_len);
+    return (ip & mask) == (prefix_addr & mask);
 }
 
 #endif /* IRON_UTILS_H */

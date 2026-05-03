@@ -179,11 +179,12 @@ This document provides a concrete, step-by-step implementation plan for the Iron
 
 3. **Pipeline integration**
    ```
-   IP Validation → ACL Check → PBR Lookup → FIB Lookup → Forward/Drop
+   IP Validation → PBR Lookup → ACL Check → FIB Lookup (fallback) → Forward/Drop
    ```
 
 4. **Invariants**
-   - ROUTE_ASSERT_ACL_FIRST — PBR never evaluated before ACL
+   - PBR has highest routing priority (evaluated before FIB)
+   - ACL is applied on the output path (after routing decision)
    - ROUTE_ASSERT_NO_LOOP — no forwarding loops via PBR
 
 5. **Validation**

@@ -32,6 +32,10 @@ vnic_t *vnic_get(int i) { (void)i; memcpy(g_fake_vnic.mac, g_fake_mac, 6); retur
 #include "../ironstack/l2/eth.c"
 #include "../ironstack/l3/route.h"
 #include "../ironstack/l3/route.c"
+#include "../ironstack/l3/acl.h"
+#include "../ironstack/l3/acl.c"
+#include "../ironstack/l3/pbr.h"
+#include "../ironstack/l3/pbr.c"
 #include "../ironstack/l3/icmp.h"
 #include "../ironstack/l3/icmp.c"
 #include "../ironstack/l3/ip.h"
@@ -61,6 +65,8 @@ static void build_ip_packet(uint8_t *buf, int *len,
 static mt_result_t test_ip_parse_and_route(void) {
     iron_stats_init();
     route_init();
+    acl_init(ACL_DEFAULT_PERMIT);
+    pbr_init();
 
     route_add((ip_prefix_t){iron_str_to_ip("10.0.2.0"), 24}, iron_str_to_ip("10.0.2.254"), 0);
 
@@ -97,6 +103,8 @@ static mt_result_t test_ip_parse_and_route(void) {
 static mt_result_t test_ip_ttl_expired(void) {
     iron_stats_init();
     route_init();
+    acl_init(ACL_DEFAULT_PERMIT);
+    pbr_init();
 
     route_add((ip_prefix_t){iron_str_to_ip("10.0.2.0"), 24}, iron_str_to_ip("10.0.2.254"), 0);
 
@@ -121,6 +129,8 @@ static mt_result_t test_ip_ttl_expired(void) {
 static mt_result_t test_ip_icmp_echo(void) {
     iron_stats_init();
     route_init();
+    acl_init(ACL_DEFAULT_PERMIT);
+    pbr_init();
 
     /* Add local address and route for reply */
     ip_add_local_addr(iron_str_to_ip("10.0.1.1"));
