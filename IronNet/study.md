@@ -34,7 +34,9 @@ This document provides a concrete, step-by-step implementation plan for the Iron
        ├── ironload/        # Stress tester
        ├── ironsim/         # Network emulator
        ├── irontrace/       # Packet capture/replay
-       └── tests/           # Unit & regression tests
+       └── tests/           # Test infrastructure
+           ├── unit/        # Fast correctness checks
+           └── module/      # Verbose integration tests
    ```
 
 2. **CMake build system**
@@ -413,17 +415,31 @@ All apps register with ironstack via a socket-like API and run on top of the cus
 
 ## Testing Strategy
 
-### Unit Tests
-- Per-module correctness (routing lookup, ACL evaluation, TCP transitions)
+### Unit Tests (`src/tests/unit/`)
+- Fast, minimal-output correctness checks
+- Per-module validation (stats, routing lookup, ACL evaluation, TCP transitions)
+- Output: simple PASS/FAIL per assertion
+- Example: `test_stats.c`, `test_eth.c`
+
+### Module Tests (`src/tests/module/`)
+- Integration tests with visible, verbose output
+- Builds real packets, parses them, and displays hex dumps + decoded fields
+- Uses `module_test.h` framework for test registration, execution, and reporting
+- Output: formatted test suite report with hex dumps, ASCII payloads, decoded protocol fields
+- Example: `test_l2_module.c` (3 test cases: text payload, IPv4+TCP SYN, invalid frames)
 
 ### Property-Based Tests
 - Randomized (config, packet sequence, timing) → all invariants must hold
 - Generators: packet fields, ACL permutations, temporal schedules
 - Oracle: invariant preservation (not output matching)
 
-### Regression Tests
+### Regression Tests (`src/tests/regression/`)
 - Captured failure traces replayed after fixes
 - CI integration: all tests pass before merge
+
+### Stress Tests (`src/tests/stress/`)
+- Load and resource exhaustion scenarios
+- Metrics: drop patterns, latency escalation, degradation behavior
 
 ### Coverage Criteria
 - 100% TCP states visited
@@ -976,12 +992,14 @@ IronNet/
 │   ├── ironsim/                  # Network emulator
 │   ├── irontrace/                # Packet capture/replay
 │   └── tests/                    # Test infrastructure
-│       ├── unit/                 # Per-module unit tests
+│       ├── unit/                 # Fast correctness checks (PASS/FAIL)
+│       ├── module/               # Verbose integration tests (hex dumps, decoded fields)
+│       │   └── module_test.h     # Module test framework
 │       ├── regression/           # Replay-based regression
 │       └── stress/               # Load test scripts
 │
 └── build/                        # Build output (out-of-source, generated)
     ├── ironstack/                # ironstack binary
-    ├── tests/                    # Test binaries
+    ├── tests/                    # Test binaries (unit + module)
     └── common/                   # libiron_common.a
 ```

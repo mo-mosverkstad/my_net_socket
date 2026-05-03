@@ -2,6 +2,8 @@ add_executable(ironstack
     main.c
     core/pipeline.c
     core/config.c
+    io/vnic.c
+    l2/eth.c
 )
 
 target_include_directories(ironstack PRIVATE
