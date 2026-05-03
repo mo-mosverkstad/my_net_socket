@@ -3,6 +3,8 @@
 #include "acl.h"
 #include "pbr.h"
 #include "icmp.h"
+#include "../l4/udp.h"
+#include "../l4/tcp.h"
 #include "log.h"
 #include "stats.h"
 #include "utils.h"
@@ -82,13 +84,9 @@ int ip_input(uint8_t *data, int len, int iface_idx) {
         case PROTO_ICMP:
             return icmp_input(hdr->src_ip, hdr->dst_ip, payload, payload_len, iface_idx);
         case PROTO_TCP:
-            /* Will call tcp_input() in Phase 5 */
-            LOG_DBG(MODULE, "TCP packet for local delivery (not yet implemented)");
-            break;
+            return tcp_input(hdr->src_ip, hdr->dst_ip, payload, payload_len, iface_idx);
         case PROTO_UDP:
-            /* Will call udp_input() in Phase 5 */
-            LOG_DBG(MODULE, "UDP packet for local delivery (not yet implemented)");
-            break;
+            return udp_input(hdr->src_ip, hdr->dst_ip, payload, payload_len, iface_idx);
         default:
             LOG_DBG(MODULE, "Unknown protocol %d", hdr->protocol);
             break;

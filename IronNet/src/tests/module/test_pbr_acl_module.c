@@ -40,6 +40,10 @@ vnic_t *vnic_get(int i) { (void)i; memcpy(g_fake_vnic.mac, g_fake_mac, 6); retur
 #include "../ironstack/l3/icmp.c"
 #include "../ironstack/l3/ip.h"
 #include "../ironstack/l3/ip.c"
+#include "../ironstack/l4/udp.h"
+#include "../ironstack/l4/udp.c"
+#include "../ironstack/l4/tcp.h"
+#include "../ironstack/l4/tcp.c"
 
 static void build_ip_packet(uint8_t *buf, int *len,
                             const char *src, const char *dst,

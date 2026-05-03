@@ -796,3 +796,382 @@ ctest --output-on-failure
 # All module tests via script
 ../src/tests/run_module_tests.sh .
 ```
+
+---
+
+## Phase 5: L4 — UDP & TCP
+
+### What was done
+
+We implemented the transport layer (Layer 4) which sits on top of IP and provides:
+- **UDP** — stateless, simple packet delivery by port number
+- **TCP** — stateful connection management with a full state machine
+
+### Concepts explained
+
+**UDP (User Datagram Protocol)**
+
+UDP is the simplest transport protocol. It adds only 8 bytes of header to an IP packet:
+```
+Bytes 0-1:  Source Port
+Bytes 2-3:  Destination Port
+Bytes 4-5:  Length (header + payload)
+Bytes 6-7:  Checksum
+```
+
+UDP is:
+- **Stateless** — no connection setup, no tracking
+- **Unreliable** — no retransmission, no ordering guarantee
+- **Fast** — minimal overhead
+
+Used for: DNS, streaming, gaming, simple request/response protocols.
+
+**TCP (Transmission Control Protocol)**
+
+TCP provides reliable, ordered, connection-oriented communication. It uses a **state machine** to track each connection's lifecycle.
+
+TCP header (20 bytes minimum):
+```
+Bytes 0-1:   Source Port
+Bytes 2-3:   Destination Port
+Bytes 4-7:   Sequence Number
+Bytes 8-11:  Acknowledgment Number
+Byte 12:     Data Offset (upper 4 bits = header length in 32-bit words)
+Byte 13:     Flags (FIN, SYN, RST, PSH, ACK, URG)
+Bytes 14-15: Window Size
+Bytes 16-17: Checksum
+Bytes 18-19: Urgent Pointer
+```
+
+**TCP Flags:**
+- `SYN` (0x02) — synchronize sequence numbers (connection start)
+- `ACK` (0x10) — acknowledgment field is valid
+- `FIN` (0x01) — no more data (connection close)
+- `RST` (0x04) — reset connection immediately
+- `PSH` (0x08) — push data to application
+- `URG` (0x20) — urgent pointer field is valid
+
+**TCP State Machine (simplified for IronNet):**
+```
+CLOSED → SYN_RECV → ESTABLISHED → FIN_WAIT_1 → FIN_WAIT_2 → TIME_WAIT → CLOSED
+```
+
+- `CLOSED` — no connection exists
+- `SYN_RECV` — received SYN, waiting for ACK (half-open)
+- `ESTABLISHED` — connection active, data can flow
+- `FIN_WAIT_1` — received FIN, waiting for ACK
+- `FIN_WAIT_2` — ACK received, waiting for peer's FIN
+- `TIME_WAIT` — both sides closed, waiting before final cleanup (prevents old packets from confusing new connections)
+
+**3-Way Handshake (connection establishment):**
+```
+Client → Server: SYN (seq=X)
+Server → Client: SYN+ACK (seq=Y, ack=X+1)
+Client → Server: ACK (seq=X+1, ack=Y+1)
+```
+After this, state = ESTABLISHED.
+
+In IronNet's simplified model, we track the server side:
+1. SYN received → state = SYN_RECV (half-open)
+2. ACK received → state = ESTABLISHED
+
+**Graceful Close (FIN sequence):**
+```
+Initiator: FIN → FIN_WAIT_1
+Peer: ACK → FIN_WAIT_2
+Peer: FIN → TIME_WAIT
+(timeout) → CLOSED
+```
+
+**Invalid Flag Combinations:**
+- `SYN+FIN` — invalid (can't start and end simultaneously)
+- `SYN+RST` — invalid (can't start and reset simultaneously)
+
+These are rejected immediately without creating any state or consuming resources. This prevents a class of resource exhaustion attacks.
+
+**Connection Table:**
+
+All active TCP connections are stored in a fixed-size table (256 entries). Each entry tracks:
+- 4-tuple: src_ip, dst_ip, src_port, dst_port
+- Current state
+- Sequence numbers (snd_nxt, rcv_nxt)
+- Last activity timestamp
+
+When the table is full, new SYN packets are rejected (resource protection).
+
+**TIME_WAIT Timeout:**
+
+Connections in TIME_WAIT are cleaned up after 60 seconds by `tcp_timer_tick()`. This prevents the table from filling up with dead connections.
+
+### Files created
+
+#### `src/ironstack/l4/udp.h` and `udp.c` — UDP handler
+
+Simple implementation:
+1. Validate packet length (≥ 8 bytes)
+2. Parse source/destination ports and payload length
+3. Increment `STAT_UDP_RX` counter
+4. Log the packet (application dispatch will be added in Phase 9)
+
+#### `src/ironstack/l4/tcp.h` — TCP interface
+
+Defines:
+- `tcp_header_t` — packed struct matching wire format
+- `tcp_state_t` — enum of all states
+- `tcp_conn_t` — connection entry (4-tuple, state, sequence numbers, timestamp)
+- Flag constants: `TCP_FLAG_SYN`, `TCP_FLAG_ACK`, `TCP_FLAG_FIN`, `TCP_FLAG_RST`
+- Helper inlines: `tcp_get_data_offset()`, `tcp_get_header_len()`
+
+API:
+- `tcp_init()` — initialize connection table
+- `tcp_input(src_ip, dst_ip, data, len, iface_idx)` — process incoming TCP segment
+- `tcp_timer_tick()` — clean up expired TIME_WAIT connections
+- `tcp_dump()` — print all active connections
+- `tcp_get_connection_count()` — for testing
+- `tcp_find_conn(...)` — for testing
+
+#### `src/ironstack/l4/tcp.c` — TCP state machine implementation
+
+**tcp_input() flow:**
+```
+1. Validate: length >= 20 bytes
+2. Parse: src_port, dst_port, seq, ack, flags
+3. Validate flags: reject SYN+FIN and SYN+RST
+4. Handle RST: if connection exists, close it immediately
+5. Handle new SYN (no existing connection):
+   - Allocate connection entry (fail if table full)
+   - Set state = SYN_RECV
+   - Record sequence numbers
+   - Increment STAT_TCP_CONN_CREATED and STAT_TCP_HALF_OPEN
+6. Handle existing connection (state machine):
+   - SYN_RECV + ACK → ESTABLISHED (decrement STAT_TCP_HALF_OPEN)
+   - ESTABLISHED + FIN → FIN_WAIT_1
+   - ESTABLISHED + data → advance rcv_nxt
+   - FIN_WAIT_1 + ACK → FIN_WAIT_2
+   - FIN_WAIT_2 + FIN → TIME_WAIT
+```
+
+**tcp_timer_tick():**
+```
+for each connection in TIME_WAIT:
+    if (now - last_activity) >= 60 seconds:
+        free connection
+        increment STAT_TCP_CONN_CLOSED
+```
+
+### L3 → L4 connection
+
+In `ip.c`, local delivery now dispatches to L4:
+```c
+case PROTO_TCP:
+    return tcp_input(hdr->src_ip, hdr->dst_ip, payload, payload_len, iface_idx);
+case PROTO_UDP:
+    return udp_input(hdr->src_ip, hdr->dst_ip, payload, payload_len, iface_idx);
+```
+
+### Pipeline update
+
+`pipeline.c` now initializes TCP:
+```c
+int iron_pipeline_init(void) {
+    vnic_init();
+    route_init();
+    acl_init(ACL_DEFAULT_PERMIT);
+    pbr_init();
+    tcp_init();
+    ...
+}
+```
+
+### Tests created
+
+#### `src/tests/unit/test_tcp.c` — TCP unit tests (5 tests)
+
+- `test_syn_creates_connection` — SYN creates entry in SYN_RECV state, counters updated
+- `test_ack_establishes_connection` — SYN then ACK → ESTABLISHED, half-open decremented
+- `test_fin_closes_connection` — Full close sequence: FIN→FIN_WAIT_1→ACK→FIN_WAIT_2→FIN→TIME_WAIT
+- `test_invalid_flags_rejected` — SYN+FIN and SYN+RST rejected, no state created, counter incremented
+- `test_connection_table_full` — Fill 256 connections, next SYN fails with STAT_TCP_DROPS_RESOURCE
+
+#### `src/tests/module/test_l4_module.c` — L4 module test (4 test cases)
+
+**Test 1: TCP 3-way handshake**
+- Sends SYN (seq=1000) → verifies SYN_RECV
+- Sends ACK (seq=1001, ack=1001) → verifies ESTABLISHED
+- Shows hex dump of SYN segment, state transitions, counters
+
+**Test 2: TCP graceful close**
+- Establishes connection first
+- FIN → FIN_WAIT_1 → ACK → FIN_WAIT_2 → FIN → TIME_WAIT
+- Shows each state transition
+
+**Test 3: TCP invalid flags rejected**
+- Sends SYN+FIN (flags=0x03)
+- Shows hex dump, verifies REJECTED, no connections created
+
+**Test 4: UDP packet received**
+- Builds UDP packet: 10.0.1.1:5000 → 10.0.2.1:53 with payload "ABCD"
+- Shows hex dump, verifies RECEIVED, UDP RX counter incremented
+
+### Module test dependency update
+
+Since `ip.c` now calls `tcp_input()` and `udp_input()`, the L3 and PBR/ACL module tests were updated to include the L4 source files:
+```c
+#include "../ironstack/l4/udp.h"
+#include "../ironstack/l4/udp.c"
+#include "../ironstack/l4/tcp.h"
+#include "../ironstack/l4/tcp.c"
+```
+
+This ensures all module tests that include `ip.c` can link successfully.
+
+### Current test summary
+
+After Phase 5, the project has:
+- **5 unit tests**: test_stats, test_eth, test_route, test_acl, test_tcp
+- **4 module tests**: test_l2_module, test_l3_module, test_pbr_acl_module, test_l4_module
+- **Total: 9 tests, all passing**
+
+### Full packet flow (complete through L4)
+
+```
+[TAP Device]
+     ↓ vnic_read()
+[Ethernet Frame]
+     ↓ eth_parse() → eth_dispatch()
+[IP Packet]
+     ↓ ip_input() → validate → TTL
+     ↓ Decision:
+     ├── Local? → tcp_input() / udp_input() / icmp_input()
+     └── Forward? → PBR → ACL → FIB → vnic_write()
+[TCP State Machine]
+     ↓ SYN → SYN_RECV → ACK → ESTABLISHED → FIN → ... → TIME_WAIT → CLOSED
+```
+
+### How to run Phase 5 tests
+
+```bash
+cd IronNet/build
+
+# All tests
+ctest --output-on-failure
+
+# TCP unit test
+./tests/test_tcp
+
+# L4 module test (verbose)
+./tests/test_l4_module
+
+# All module tests via script
+../src/tests/run_module_tests.sh .
+```
+
+### Limitations of Phase 5
+
+**IP interfaces are not yet configurable at runtime.**
+
+In the current implementation, IP addresses (e.g., 10.0.1.1, 10.0.2.1) used in module tests are just hardcoded values in test packets. There is no interface configuration system yet. The tests work because:
+
+1. `ip_add_local_addr(ip)` manually registers an IP as "belonging to this stack" (for local delivery decisions)
+2. `route_add(prefix, next_hop, iface_idx)` manually tells the stack where to forward packets
+3. Module tests use VNIC stubs (fake interfaces) instead of real TUN/TAP devices
+
+In a real deployment, you would need to:
+- Create TAP interfaces with `vnic_create("iron0", mac)`
+- Assign IP addresses to each interface
+- Configure routes between them
+- Bring up the TAP devices from the OS side (`ip link set iron0 up`)
+
+```c
+// Create two virtual interfaces
+uint8_t mac0[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+uint8_t mac1[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x02};
+int iface0 = vnic_create("iron0", mac0);  // → TAP device "iron0"
+int iface1 = vnic_create("iron1", mac1);  // → TAP device "iron1"
+
+// Assign IP addresses
+ip_add_local_addr(iron_str_to_ip("10.0.1.1"));  // iron0
+ip_add_local_addr(iron_str_to_ip("10.0.2.1"));  // iron1
+
+// Add routes
+route_add({iron_str_to_ip("10.0.1.0"), 24}, iron_str_to_ip("10.0.1.1"), iface0);
+route_add({iron_str_to_ip("10.0.2.0"), 24}, iron_str_to_ip("10.0.2.1"), iface1);
+```
+
+Then on WSL you'd also configure the TAP devices from the OS side:
+
+```
+sudo ip addr add 10.0.1.2/24 dev iron0
+sudo ip addr add 10.0.2.2/24 dev iron1
+sudo ip link set iron0 up
+sudo ip link set iron1 up
+```
+
+This interface configuration capability is planned for **Phase 7 (ironctl)**, where the CLI will allow runtime configuration of interfaces, IP addresses, and routes.
+
+---
+
+## Appendix: What is TUN and what is TAP?
+
+**TUN** and **TAP** are virtual network interfaces provided by the Linux kernel. They let user-space programs send and receive network packets without real hardware.
+
+**TAP (Network TAP)** — operates at **Layer 2 (Ethernet)**
+- You read/write full Ethernet frames (with MAC headers)
+- Acts like a virtual Ethernet cable plugged into your program
+- Used when you need to handle MAC addresses, ARP, VLANs, etc.
+- This is what IronNet uses — because we implement our own L2 parsing
+
+**TUN (Network TUNnel)** — operates at **Layer 3 (IP)**
+- You read/write raw IP packets (no Ethernet header)
+- The kernel handles L2 for you
+- Used for VPNs (e.g., OpenVPN, WireGuard) where you only care about IP routing
+
+**Comparison:**
+
+| | TUN | TAP |
+|---|---|---|
+| Layer | L3 (IP) | L2 (Ethernet) |
+| Packets include | IP header + payload | Ethernet header + IP header + payload |
+| Use case | VPN tunnels | Virtual switches, full stack simulation |
+| ARP handling | Kernel does it | Your program does it |
+
+**Why IronNet uses TAP:**
+
+Since IronNet implements its own protocol stack from L2 upward, we need to see the raw Ethernet frames — so TAP is the right choice. If we used TUN, we'd skip L2 entirely and miss the opportunity to study Ethernet-level behavior.
+
+**How it works in practice:**
+
+```
+Your program ←→ /dev/net/tun (TAP mode) ←→ Virtual interface (iron0) ←→ Linux kernel networking
+```
+
+- `write()` to the fd → sends a frame "out" of iron0 (kernel sees it)
+- `read()` from the fd → receives a frame that was sent "into" iron0 (from kernel or other programs)
+
+---
+
+## Appendix: Why does vnic.c open /dev/net/tun for a TAP device?
+
+The code in `src/ironstack/io/vnic.c` opens `/dev/net/tun`:
+
+```c
+int fd = open("/dev/net/tun", O_RDWR | O_NONBLOCK);
+```
+
+This looks confusing — we want TAP, but we open "tun"?
+
+The answer: `/dev/net/tun` is the **single entry point** for both TUN and TAP devices on Linux. What determines whether you get a TUN or TAP interface is the **flags** passed to `ioctl`:
+
+```c
+int fd = open("/dev/net/tun", O_RDWR | O_NONBLOCK);  // Same file for both
+
+struct ifreq ifr;
+ifr.ifr_flags = IFF_TAP | IFF_NO_PI;  // ← THIS makes it TAP (not TUN)
+ioctl(fd, TUNSETIFF, &ifr);
+```
+
+- `IFF_TAP` → Layer 2 (Ethernet frames) — what IronNet uses
+- `IFF_TUN` → Layer 3 (IP packets)
+- `IFF_NO_PI` → don't prepend extra packet info header
+
+So even though we open `/dev/net/tun`, the `IFF_TAP` flag tells the kernel to create a TAP device. The filename is a bit confusing — it's just how Linux designed the API.

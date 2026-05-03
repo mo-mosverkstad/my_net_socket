@@ -9,6 +9,8 @@ add_executable(ironstack
     l3/icmp.c
     l3/acl.c
     l3/pbr.c
+    l4/udp.c
+    l4/tcp.c
 )
 
 target_include_directories(ironstack PRIVATE
