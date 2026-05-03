@@ -94,7 +94,8 @@ This document provides a concrete, step-by-step implementation plan for the Iron
    ```
 
 4. **Validation**
-   - Unit test: parse valid/invalid frames
+   - Unit test: parse valid/invalid frames (`test_eth`)
+   - Module test: visible frame building, parsing, hex dump, ASCII payload (`test_l2_module`)
    - Inject oversized frame → verify drop + counter increment
 
 ---
@@ -134,9 +135,9 @@ This document provides a concrete, step-by-step implementation plan for the Iron
    - TTL must decrement exactly once per hop
 
 6. **Validation**
-   - Ping between two virtual interfaces
-   - Route lookup correctness tests
-   - Invalid IP header → drop with reason code
+   - Unit test: routing add/delete/lookup/longest-prefix match (`test_route`)
+   - Module test: IP forwarding with TTL decrement, TTL expiry drop, ICMP echo request→reply (`test_l3_module`)
+   - Invalid IP header → drop with reason code and counter
 
 ---
 
@@ -508,10 +509,12 @@ All apps register with ironstack via a socket-like API and run on top of the cus
 
 ## Next Steps
 
-1. Set up WSL Ubuntu development environment
-2. Create Git repository with initial CMake skeleton
-3. Implement `common/` utilities and IRON_ASSERT framework
-4. Begin Phase 2: TUN/TAP integration and L2 parsing
+1. ~~Set up WSL Ubuntu development environment~~ ✅
+2. ~~Create Git repository with initial CMake skeleton~~ ✅
+3. ~~Implement `common/` utilities and IRON_ASSERT framework~~ ✅
+4. ~~Phase 2: TUN/TAP integration and L2 parsing~~ ✅
+5. ~~Phase 3: L3 IP layer, routing table, ICMP~~ ✅
+6. Begin Phase 4: ACL & PBR engines
 
 ---
 

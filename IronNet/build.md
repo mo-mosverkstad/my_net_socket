@@ -91,6 +91,7 @@ Module tests produce verbose, visible output (hex dumps, decoded fields, formatt
 ```bash
 cd IronNet/build
 ./tests/test_l2_module
+./tests/test_l3_module
 ```
 
 Example output:
@@ -153,7 +154,7 @@ Example output:
 ```bash
 cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debug && make && ctest --output-on-failure
 
-./tests/test_l2_module
+../src/tests/run_module_tests.sh .
 
 ```
 
@@ -166,7 +167,9 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | ironstack | `build/ironstack/ironstack` | Daemon | Protocol stack daemon |
 | test_stats | `build/tests/test_stats` | Unit test | Stats module correctness |
 | test_eth | `build/tests/test_eth` | Unit test | L2 Ethernet parsing correctness |
+| test_route | `build/tests/test_route` | Unit test | L3 routing table correctness |
 | test_l2_module | `build/tests/test_l2_module` | Module test | L2 visible integration test |
+| test_l3_module | `build/tests/test_l3_module` | Module test | L3 IP/ICMP visible integration test |
 | libiron_common.a | `build/common/libiron_common.a` | Library | Shared utility library |
 
 ---

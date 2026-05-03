@@ -4,6 +4,9 @@ add_executable(ironstack
     core/config.c
     io/vnic.c
     l2/eth.c
+    l3/ip.c
+    l3/route.c
+    l3/icmp.c
 )
 
 target_include_directories(ironstack PRIVATE

@@ -3,6 +3,12 @@
 #include <string.h>
 #include "stats.h"
 
+/* Stub ip_input for unit test (L3 not under test here) */
+int ip_input(uint8_t *data, int len, int iface_idx) {
+    (void)data; (void)len; (void)iface_idx;
+    return 0;
+}
+
 /* Include eth.h directly — we test parsing logic without TUN/TAP */
 #include "../ironstack/l2/eth.h"
 #include "../ironstack/l2/eth.c"

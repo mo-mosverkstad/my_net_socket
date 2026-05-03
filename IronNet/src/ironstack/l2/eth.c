@@ -2,6 +2,7 @@
 #include "log.h"
 #include "stats.h"
 #include "utils.h"
+#include "../l3/ip.h"
 
 #include <string.h>
 
@@ -51,7 +52,7 @@ void eth_dispatch(eth_frame_t *frame) {
     switch (ethertype) {
     case ETHERTYPE_IPV4:
         LOG_DBG(MODULE, "Dispatching IPv4 packet (%d bytes)", frame->payload_len);
-        /* Will call ip_input() in Phase 3 */
+        ip_input(frame->payload, frame->payload_len, frame->iface_idx);
         break;
     case ETHERTYPE_ARP:
         LOG_DBG(MODULE, "ARP frame received (not implemented)");

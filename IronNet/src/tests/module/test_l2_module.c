@@ -3,6 +3,13 @@
 #include "module_test.h"
 #include "stats.h"
 #include "utils.h"
+
+/* Stub ip_input for module test (L3 not under test here) */
+int ip_input(uint8_t *data, int len, int iface_idx) {
+    (void)data; (void)len; (void)iface_idx;
+    return 0;
+}
+
 #include "l2/eth.h"
 #include "l2/eth.c"
 

@@ -3,6 +3,7 @@
 #include "stats.h"
 #include "../io/vnic.h"
 #include "../l2/eth.h"
+#include "../l3/route.h"
 
 #include <unistd.h>
 
@@ -13,6 +14,7 @@ static uint8_t rx_buf[RX_BUF_SIZE];
 
 int iron_pipeline_init(void) {
     if (vnic_init() != 0) return -1;
+    if (route_init() != 0) return -1;
     LOG_INF(MODULE, "Pipeline initialized");
     return 0;
 }
