@@ -12,7 +12,7 @@ ctest --output-on-failure
 ../src/tests/run_module_tests.sh .
 ```
 
-**Current total: 20 tests (12 unit + 8 module), all passing.**
+**Current total: 22 tests (13 unit + 9 module), all passing.**
 
 ---
 
@@ -138,6 +138,17 @@ Unit tests are fast, minimal-output correctness checks. Each validates a single 
 | test_delete_route | Deleted route no longer matches |
 | test_duplicate_table_name | Duplicate name returns existing table |
 
+### test_conntrack (6 assertions)
+
+| Test | What it verifies |
+|------|------------------|
+| test_new_connection | First packet creates NEW entry |
+| test_reply_establishes | Reply packet transitions to ESTABLISHED |
+| test_udp_established | UDP query+reply → ESTABLISHED |
+| test_bidirectional_lookup | Entry found from both original and reply direction |
+| test_unknown_is_invalid | No entry → CT_STATE_INVALID |
+| test_packet_counters | Original and reply packet counts tracked |
+
 ---
 
 ## Module Tests
@@ -213,6 +224,15 @@ Module tests produce verbose output with hex dumps, decoded fields, and visible 
 | PBR table selection | PBR matches src prefix → uses alternate table |
 | Table isolation | Route in one table not visible in another |
 
+### test_conntrack_module (4 test cases)
+
+| Test | What it demonstrates |
+|------|---------------------|
+| TCP lifecycle | SYN→NEW, SYN+ACK→ESTABLISHED, FIN→closing, packet counts |
+| UDP stateful | Query→NEW, Reply→ESTABLISHED |
+| Stateful ACL | Return traffic PERMIT (established), unsolicited DENY (invalid) |
+| Timeout expiry | UDP entry expires after 30s timeout |
+
 ---
 
 ## Live Demo
@@ -245,6 +265,7 @@ ctest --output-on-failure
 ./tests/test_iface
 ./tests/test_pbr
 ./tests/test_route_table
+./tests/test_conntrack
 
 # Single module test (verbose)
 ./tests/test_l2_module
@@ -255,6 +276,7 @@ ctest --output-on-failure
 ./tests/test_vlan_module
 ./tests/test_bridge_module
 ./tests/test_route_table_module
+./tests/test_conntrack_module
 
 # All module tests via script
 ../src/tests/run_module_tests.sh .

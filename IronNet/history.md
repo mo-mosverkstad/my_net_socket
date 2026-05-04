@@ -1872,3 +1872,93 @@ cd IronNet/build
 # All tests
 ctest --output-on-failure
 ```
+
+---
+
+## Phase 8d: Connection Tracking
+
+### What was done
+
+We implemented a connection tracking (conntrack) subsystem that monitors all network connections bidirectionally, enabling stateful packet filtering.
+
+### Concepts explained
+
+**What is connection tracking?**
+
+Traditional ACLs are stateless — they evaluate each packet independently. Connection tracking adds **state awareness**: it remembers that an internal host initiated a connection, so return traffic from the external server is automatically permitted.
+
+**States:**
+- `NEW` — first packet seen (e.g., TCP SYN, first UDP packet)
+- `ESTABLISHED` — reply seen (bidirectional traffic confirmed)
+- `RELATED` — related to an existing connection (e.g., ICMP error for a TCP flow)
+- `INVALID` — no matching entry exists (unsolicited traffic)
+
+**Bidirectional matching:**
+
+A single conntrack entry matches traffic in both directions:
+- Original: 10.0.1.1:5000 → 10.0.2.1:80
+- Reply: 10.0.2.1:80 → 10.0.1.1:5000
+
+Both directions map to the same entry.
+
+**Stateful ACL:**
+
+With conntrack, ACL rules can match on connection state:
+- `permit state established` — allows return traffic without explicit rules
+- `deny state new` — blocks new inbound connections
+- `deny state invalid` — blocks unsolicited traffic
+
+**Per-protocol timeouts:**
+- TCP established: 300 seconds
+- TCP other (SYN, FIN): 60 seconds
+- UDP: 30 seconds
+- ICMP: 10 seconds
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironstack/l3/conntrack.h` | States, entry structure, API |
+| `ironstack/l3/conntrack.c` | Bidirectional matching, state transitions, timeouts |
+| `tests/unit/test_conntrack.c` | 6 unit tests |
+| `tests/module/test_conntrack_module.c` | 4 module tests |
+
+### Implementation details
+
+**Entry structure:**
+- 5-tuple: src_ip, dst_ip, protocol, src_port, dst_port (original direction)
+- State: NEW / ESTABLISHED / RELATED / INVALID
+- Timestamps and packet counters (original + reply)
+
+**conntrack_update() logic:**
+1. Check original direction → if found, update timestamp + orig counter
+2. Check reply direction → if found, transition NEW→ESTABLISHED, update reply counter
+3. Neither found → create NEW entry
+
+**Timer expiry:**
+- Each entry has a protocol-specific timeout
+- `conntrack_timer_tick()` removes expired entries
+- Established TCP connections live longest (300s)
+
+### Tests created
+
+#### Unit test: test_conntrack (6 tests)
+- `test_new_connection` — SYN creates NEW entry
+- `test_reply_establishes` — Reply transitions to ESTABLISHED
+- `test_udp_established` — UDP query+reply → ESTABLISHED
+- `test_bidirectional_lookup` — Entry found from both directions
+- `test_unknown_is_invalid` — No entry → INVALID
+- `test_packet_counters` — orig=3, reply=1 tracked correctly
+
+#### Module test: test_conntrack_module (4 tests)
+- TCP lifecycle: SYN→NEW, SYN+ACK→ESTABLISHED, data, FIN→closing
+- UDP stateful: query→NEW, reply→ESTABLISHED
+- Stateful ACL: return traffic PERMIT, unsolicited DENY
+- Timeout expiry: UDP entry removed after 30s
+
+### Current test summary
+
+After Phase 8d:
+- **13 unit tests**
+- **9 module tests**
+- **Total: 22 tests, all passing**

@@ -115,6 +115,7 @@ cd IronNet/build
 ./tests/test_vlan_module
 ./tests/test_bridge_module
 ./tests/test_route_table_module
+./tests/test_conntrack_module
 ```
 
 Example output:
@@ -200,6 +201,7 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | test_iface | `build/tests/test_iface` | Unit test | Interface config model correctness |
 | test_pbr | `build/tests/test_pbr` | Unit test | PBR matching and loop detection |
 | test_route_table | `build/tests/test_route_table` | Unit test | Multiple routing tables correctness |
+| test_conntrack | `build/tests/test_conntrack` | Unit test | Connection tracking correctness |
 | test_l2_module | `build/tests/test_l2_module` | Module test | L2 visible integration test |
 | test_l3_module | `build/tests/test_l3_module` | Module test | L3 IP/ICMP visible integration test |
 | test_pbr_acl_module | `build/tests/test_pbr_acl_module` | Module test | PBR & ACL visible integration test |
@@ -208,6 +210,7 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | test_vlan_module | `build/tests/test_vlan_module` | Module test | VLAN visible integration test |
 | test_bridge_module | `build/tests/test_bridge_module` | Module test | Bridge visible integration test |
 | test_route_table_module | `build/tests/test_route_table_module` | Module test | Multiple routing tables integration test |
+| test_conntrack_module | `build/tests/test_conntrack_module` | Module test | Connection tracking integration test |
 | libiron_common.a | `build/common/libiron_common.a` | Library | Shared utility library |
 
 ---

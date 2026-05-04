@@ -217,6 +217,7 @@ Key module tests with visible output:
 - `./tests/test_vlan_module` — VLAN tag insert/strip
 - `./tests/test_bridge_module` — MAC learning and flooding
 - `./tests/test_route_table_module` — Multiple routing tables with PBR selection
+- `./tests/test_conntrack_module` — Connection tracking state transitions
 
 To run all tests:
 ```bash
