@@ -18,6 +18,7 @@
 #include "../ironprobe/probe.h"
 #include "../ironfuzz/fuzz.h"
 #include "../ironload/load.h"
+#include "../ironstack/security/defense.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -74,6 +75,9 @@ static void cmd_help(void) {
     printf("  acl-check <ip>          - Validate ACL enforcement\n");
     printf("  fuzz <tcp|dns|http|rpc> <iterations> - Fuzz a target\n");
     printf("  load <tcp|route|acl|bw> [count]       - Stress test\n");
+    printf("  defense <name> <enable|disable>        - Toggle defense\n");
+    printf("  defense rate-limit <N>/s               - Set rate limit\n");
+    printf("  defense show                           - Show defense status\n");
     printf("  help                    - Show this help\n");
     printf("  exit                    - Stop the router\n");
 }
@@ -370,6 +374,29 @@ int cli_execute(const char *line) {
             audit_disable();
         } else {
             printf("Usage: audit <enable|disable>\n");
+        }
+    } else if (strcmp(argv[0], "defense") == 0) {
+        if (argc < 2) {
+            printf("Usage: defense <name> <enable|disable> | defense rate-limit <N>/s | defense show\n");
+        } else if (strcmp(argv[1], "show") == 0) {
+            defense_dump();
+        } else if (strcmp(argv[1], "rate-limit") == 0 && argc >= 3) {
+            int rate = atoi(argv[2]);
+            if (rate > 0) {
+                rate_limit_set(rate);
+                defense_enable("rate-limit");
+            } else {
+                printf("Invalid rate: %s\n", argv[2]);
+            }
+        } else if (argc >= 3) {
+            if (strcmp(argv[2], "enable") == 0)
+                defense_enable(argv[1]);
+            else if (strcmp(argv[2], "disable") == 0)
+                defense_disable(argv[1]);
+            else
+                printf("Usage: defense %s <enable|disable>\n", argv[1]);
+        } else {
+            printf("Usage: defense <name> <enable|disable>\n");
         }
     } else if (strcmp(argv[0], "exit") == 0 || strcmp(argv[0], "quit") == 0) {
         iron_request_shutdown();

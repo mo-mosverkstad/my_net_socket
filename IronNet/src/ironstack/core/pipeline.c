@@ -18,6 +18,7 @@
 #include "../ironapps/kv_server.h"
 #include "../ironapps/http_server.h"
 #include "../ironapps/rpc_server.h"
+#include "../security/defense.h"
 
 #include <unistd.h>
 
@@ -41,6 +42,7 @@ int iron_pipeline_init(void) {
     if (tcp_init() != 0) return -1;
     audit_init(AUDIT_DEFAULT_FILE);
     app_socket_init();
+    defense_init();
     echo_server_start();
     dns_server_start();
     kv_server_start();

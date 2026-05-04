@@ -610,6 +610,90 @@ Tests available:
 - `load acl [count]` — Add ACL rules, measure per-packet evaluation time
 - `load bw [count]` — Send max-rate packets, measure throughput and drop patterns
 
+### Defense Mechanisms
+
+Enable/disable defenses to protect against attacks:
+
+```
+ironctl> defense show
+=== Defense Status ===
+  syn-cookies          disabled
+  rate-limit           disabled
+  arp-inspection       disabled
+  vlan-strict          disabled
+  rst-validation       disabled
+  urpf                 disabled
+  conn-timeout         disabled
+  frag-strict          disabled
+
+ironctl> defense syn-cookies enable
+[INFO ] [DEFENSE] Defense 'syn-cookies' ENABLED
+
+ironctl> defense rate-limit 100/s
+[INFO ] [DEFENSE] Rate limit set to 100/s per source
+[INFO ] [DEFENSE] Defense 'rate-limit' ENABLED
+
+ironctl> defense show
+=== Defense Status ===
+  syn-cookies          ENABLED
+  rate-limit           ENABLED
+  ...
+```
+
+**SYN cookies effect** — with SYN cookies enabled, the connection table stays empty during a SYN flood because no state is allocated until a valid ACK completes the handshake:
+
+```
+# Without SYN cookies: table fills at 256
+ironctl> load tcp 300
+  Succeeded:  256
+  Rejected:   44
+
+# With SYN cookies: all SYNs handled statelessly
+ironctl> defense syn-cookies enable
+ironctl> load tcp 300
+  Succeeded:  300
+  Rejected:   0
+```
+
+### External Attack Tool (ironattack)
+
+The `ironattack` binary sends real attack packets via TAP interfaces. Requires sudo and a running router.
+
+**Terminal 1: Start router**
+```bash
+sudo ./ironstack/ironstack ../src/configs/router.conf
+```
+
+**Terminal 2: Run SYN flood attack**
+```bash
+sudo ./ironattack/ironattack syn-flood --target 10.0.1.1 --port 7 --rate 1000 --count 5000
+```
+
+Output:
+```
+=== SYN Flood Attack ===
+  Target:  10.0.1.1:7
+  Iface:   iron0
+  Rate:    1000 pps
+  Count:   5000
+
+  Sent:    5000 packets
+  Elapsed: 5.01 s
+  Rate:    998 pps
+```
+
+**Terminal 1: Observe and defend**
+```
+ironctl> show tcp
+# See connection table filling up
+
+ironctl> defense syn-cookies enable
+# Now table stops growing — SYNs handled statelessly
+
+ironctl> show stats
+# See tcp.drops.resource counter (before defense)
+```
+
 ### Audit log file
 
 Events are also written to `/tmp/ironnet_audit.log` in structured format:

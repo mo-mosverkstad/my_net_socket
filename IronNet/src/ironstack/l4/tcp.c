@@ -4,6 +4,7 @@
 #include "utils.h"
 #include "../ironapps/app_socket.h"
 #include "../l3/ip.h"
+#include "../security/defense.h"
 
 #include <string.h>
 #include <time.h>
@@ -165,6 +166,28 @@ int tcp_input(uint32_t src_ip, uint32_t dst_ip,
 
     /* New connection: SYN without existing state */
     if ((flags & TCP_FLAG_SYN) && !(flags & TCP_FLAG_ACK) && !conn) {
+        /* Rate limiting defense */
+        if (defense_is_enabled("rate-limit")) {
+            if (!rate_limit_check(src_ip)) {
+                LOG_DBG(MODULE, "Rate limit: SYN dropped from %08X", src_ip);
+                iron_stats_increment(STAT_TCP_DROPS_RESOURCE);
+                return -1;
+            }
+        }
+
+        /* SYN cookies defense: don't allocate state, send cookie in seq */
+        if (defense_is_enabled("syn-cookies")) {
+            app_listener_t *listener = app_find_listener(PROTO_TCP, dport);
+            if (listener) {
+                uint32_t cookie = syncookie_generate(src_ip, dst_ip, sport, dport, seq);
+                tcp_send_segment(dst_ip, src_ip, dport, sport,
+                                 cookie, seq + 1,
+                                 TCP_FLAG_SYN | TCP_FLAG_ACK);
+                LOG_DBG(MODULE, "SYN cookie sent (port %u -> %u)", sport, dport);
+            }
+            return 0; /* No state allocated */
+        }
+
         conn = tcp_alloc_conn();
         if (!conn) return -1; /* Table full */
 
@@ -191,6 +214,29 @@ int tcp_input(uint32_t src_ip, uint32_t dst_ip,
             conn->snd_nxt++;
         }
         return 0;
+    }
+
+    /* SYN cookie validation: ACK arrives but no connection exists */
+    if ((flags & TCP_FLAG_ACK) && !conn && defense_is_enabled("syn-cookies")) {
+        if (syncookie_validate(src_ip, dst_ip, sport, dport, 0, ack)) {
+            conn = tcp_alloc_conn();
+            if (!conn) return -1;
+            conn->src_ip = src_ip;
+            conn->dst_ip = dst_ip;
+            conn->src_port = sport;
+            conn->dst_port = dport;
+            conn->state = TCP_ESTABLISHED;
+            conn->rcv_nxt = seq;
+            conn->snd_nxt = ack;
+            conn->last_activity = tcp_now();
+            conn->active = true;
+            iron_stats_increment(STAT_TCP_CONN_CREATED);
+            LOG_DBG(MODULE, "SYN cookie validated, ESTABLISHED (port %u -> %u)", sport, dport);
+            app_listener_t *listener = app_find_listener(PROTO_TCP, dport);
+            if (listener && listener->on_accept)
+                listener->on_accept(0, src_ip, sport);
+            return 0;
+        }
     }
 
     if (!conn) {

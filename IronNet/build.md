@@ -96,6 +96,9 @@ ping <ip>               - Check if target is alive
 acl-check <ip>          - Validate ACL enforcement
 fuzz <tcp|dns|http|rpc> <iterations> - Fuzz a target protocol
 load <tcp|route|acl|bw> [count]     - Stress test a subsystem
+defense <name> <enable|disable>     - Toggle a defense mechanism
+defense rate-limit <N>/s            - Set per-source SYN rate limit
+defense show                        - Show all defense states
 exit                    - Stop the router
 ```
 
@@ -252,6 +255,7 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | libiron_probe.a | `build/ironprobe/libiron_probe.a` | Library | Network scanner |
 | libiron_fuzz.a | `build/ironfuzz/libiron_fuzz.a` | Library | Protocol fuzzer |
 | libiron_load.a | `build/ironload/libiron_load.a` | Library | Stress tester |
+| ironattack | `build/ironattack/ironattack` | Binary | External attack tool (SYN flood, etc.) |
 
 ---
 
