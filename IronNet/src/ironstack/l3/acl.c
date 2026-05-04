@@ -2,6 +2,7 @@
 #include "log.h"
 #include "stats.h"
 #include "utils.h"
+#include "../ironmon/audit.h"
 
 #include <string.h>
 
@@ -87,6 +88,10 @@ acl_action_t acl_evaluate(uint32_t src_ip, uint32_t dst_ip,
                         iron_ip_to_str(src_ip, src_buf, sizeof(src_buf)),
                         iron_ip_to_str(dst_ip, dst_buf, sizeof(dst_buf)),
                         protocol, src_port, dst_port);
+                char detail[64];
+                snprintf(detail, sizeof(detail), "rule %u", g_acl_rules[i].rule_id);
+                audit_log_event(AUDIT_ACL_DENY, src_ip, dst_ip,
+                                protocol, src_port, dst_port, detail);
             }
             return g_acl_rules[i].action;
         }

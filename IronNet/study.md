@@ -587,6 +587,30 @@ A **bridge** (or Layer 2 switch) connects multiple ports and forwards Ethernet f
 
 ## Phase 10: Telemetry & Audit Logging — ironmon (Week 23–24)
 
+### Analysis: What already exists vs what's needed
+
+| Component | Already implemented | What's missing |
+|-----------|--------------------|-----------------|
+| Per-layer counters | ✅ `stats.h/c` (STAT_L2_*, STAT_L3_*, STAT_TCP_*, STAT_UDP_*) | More granular counters (per-interface, per-VLAN, per-ACL-rule) |
+| Drop reasons | ✅ `drop_reason_t` enum in types.h | Not all reasons tracked in stats yet (NAT, conntrack, fragment) |
+| Stats dump | ✅ `iron_stats_dump()` prints non-zero counters | No structured export (JSON), no file output |
+| CLI show | ✅ `show stats` in ironctl | No `show audit-log`, no filtering |
+| Logging | ✅ `log.h` with levels (DEBUG/INFO/WARN/ERROR) | Not structured for machine parsing, no audit-specific log |
+| ACL deny logging | ✅ Prints at INFO level with src/dst/port | Not written to audit file |
+
+### Design decision
+
+| Option | Approach | Chosen? |
+|--------|----------|---------|
+| **1. Enhance existing stats + add audit log file** | Extend stats.h, add audit_log.c with file output | ✅ Yes |
+| 2. Full monitoring daemon (separate process) | ironmon as separate process with shared memory | No (overkill for research) |
+
+**Decision:** Enhance the existing infrastructure rather than building a separate monitoring daemon. Add:
+- Per-interface and per-rule counters
+- Structured audit log (file-based, one event per line)
+- JSON export for stats
+- `show audit-log` CLI command
+
 ### Goals
 - Real-time metrics export
 - Per-layer counters, drop reasons, state table utilization
@@ -594,36 +618,48 @@ A **bridge** (or Layer 2 switch) connects multiple ports and forwards Ethernet f
 
 ### Tasks
 
-1. **Metrics infrastructure**
-   ```c
-   struct tcp_stats {
-       uint64_t conn_created;
-       uint64_t conn_closed;
-       uint64_t half_open;
-       uint64_t retransmissions;
-   };
-   ```
+1. **Enhanced metrics infrastructure**
+   - Per-interface counters (rx/tx/drops per iface)
+   - Per-ACL-rule hit counters (already exists, expose via CLI)
+   - Per-VLAN counters
+   - Connection tracking stats (new/established/expired counts)
+   - NAT mapping stats (active/allocated/exhausted)
 
-2. **Drop reason taxonomy**
+2. **Drop reason taxonomy (complete)**
    ```
    DROP_ACL, DROP_NO_ROUTE, DROP_PBR_LOOP,
    DROP_TCP_INVALID_STATE, DROP_RESOURCE_LIMIT,
    DROP_IPSEC_NO_SA, DROP_TTL_EXPIRED,
    DROP_NAT_NO_POOL, DROP_CONNTRACK_INVALID,
-   DROP_FRAGMENT_OVERLAP, DROP_ARP_INSPECTION
+   DROP_FRAGMENT_OVERLAP, DROP_ARP_INSPECTION,
+   DROP_VLAN_MISMATCH, DROP_BRIDGE_LOOP
    ```
 
-3. **Security audit log**
+3. **Security audit log (`audit_log.c`)**
    - Log all security-relevant events with timestamp, src/dst, action, reason
-   - Events: ACL deny, IPsec drop, invalid flags, connection table full, ARP anomaly
-   - Structured format (parseable for automated analysis)
-   - Configurable verbosity (summary vs detailed)
-   - Supports post-incident forensic analysis
+   - Events: ACL deny, IPsec drop, invalid flags, connection table full, ARP anomaly, NAT exhaustion
+   - Structured format: `timestamp|event_type|src_ip|dst_ip|proto|port|action|reason`
+   - Configurable: enable/disable, verbosity (summary vs detailed)
+   - File output: `/tmp/ironnet_audit.log` (configurable path)
+   - Ring buffer in memory for `show audit-log` (last N events)
 
-4. **Export interface**
-   - CLI: `show stats`, `show audit-log`
-   - Structured output (JSON or plain text) for scripting
-   - File export for offline analysis
+4. **JSON export**
+   - `show stats json` — output all counters as JSON
+   - `show audit-log json` — output recent events as JSON array
+   - Useful for scripting and automated analysis
+
+5. **CLI integration**
+   - `show stats` — human-readable (existing)
+   - `show stats json` — machine-readable
+   - `show audit-log` — last N security events
+   - `show audit-log json` — JSON format
+   - `audit enable/disable` — toggle audit logging
+
+6. **Validation**
+   - Generate traffic that triggers ACL deny → verify audit log entry
+   - Generate traffic that triggers NAT → verify stats updated
+   - Export JSON → verify parseable by external tool
+   - Module test: audit log captures events correctly
 
 ---
 

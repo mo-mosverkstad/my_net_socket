@@ -2207,3 +2207,83 @@ echo -e "show routes\nexit" | ./ironstack/ironstack ../src/configs/router.conf
 After Phase 9:
 - **14 unit tests + 10 module tests = 24 tests, all passing**
 - CLI tested interactively via daemon (see DEMO.md)
+
+---
+
+## Phase 10: Telemetry & Audit Logging — ironmon
+
+### What was done
+
+We implemented the telemetry and audit logging subsystem (ironmon) that provides:
+- Security audit trail with ring buffer and file output
+- JSON export for stats and audit events
+- CLI integration for real-time monitoring
+- Automatic audit logging of ACL deny events
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironmon/audit.h` | Audit event types (10 types), ring buffer structure, API |
+| `ironmon/audit.c` | Ring buffer (256 events), file output, JSON export, enable/disable |
+| `ironmon/stats_json.h` | JSON stats export API |
+| `ironmon/stats_json.c` | Outputs all non-zero counters as JSON object |
+| `ironmon/CMakeLists.txt` | Builds iron_mon as static library |
+| `tests/stubs/audit_stub.c` | Stub for tests that include acl.c (avoids linking iron_mon) |
+
+### Implementation details
+
+**Audit event types:**
+- `AUDIT_ACL_DENY` — packet denied by ACL rule
+- `AUDIT_IPSEC_DROP` — IPsec policy drop
+- `AUDIT_TCP_INVALID_FLAGS` — invalid TCP flag combination
+- `AUDIT_TCP_TABLE_FULL` — connection table exhausted
+- `AUDIT_ARP_ANOMALY` — suspicious ARP behavior
+- `AUDIT_NAT_EXHAUSTION` — NAT port pool exhausted
+- `AUDIT_CONNTRACK_INVALID` — invalid connection state
+- `AUDIT_FRAGMENT_DROP` — fragment security violation
+- `AUDIT_VLAN_MISMATCH` — VLAN isolation violation
+- `AUDIT_TTL_EXPIRED` — TTL reached zero
+
+**Ring buffer:**
+- Fixed size: 256 events
+- Circular: oldest events overwritten when full
+- `audit_get_recent(out, max)` retrieves last N events
+- `audit_dump()` prints all events in human-readable format
+
+**File output:**
+- Path: `/tmp/ironnet_audit.log` (configurable)
+- Format: `timestamp|event_type|src_ip|dst_ip|proto|src_port|dst_port|detail`
+- Flushed after each event (no data loss on crash)
+- Append mode (preserves history across restarts)
+
+**JSON export:**
+- `audit_dump_json()` — array of event objects
+- `iron_stats_dump_json()` — object with counter name:value pairs
+- Both output to stdout for CLI display
+
+**Integration:**
+- `acl.c` calls `audit_log_event(AUDIT_ACL_DENY, ...)` on every deny
+- Pipeline calls `audit_init(AUDIT_DEFAULT_FILE)` at startup
+- CLI commands: `show audit-log`, `show audit-log json`, `show stats json`, `audit enable/disable`
+
+**Test stub pattern:**
+- Tests that include `acl.c` directly (test_acl, test_l3_module, test_pbr_acl_module) now link against `tests/stubs/audit_stub.c` which provides no-op implementations of all audit functions
+- This avoids linking the full iron_mon library into unit tests
+
+### New CLI commands added
+
+| Command | Output |
+|---------|--------|
+| `show stats json` | `{"l2.rx_frames": 47, "l3.drops.acl": 3}` |
+| `show audit-log` | Human-readable event list with timestamps |
+| `show audit-log json` | JSON array of event objects |
+| `audit enable` | Enable audit logging |
+| `audit disable` | Disable audit logging |
+
+### Current test summary
+
+After Phase 10:
+- **14 unit tests + 10 module tests = 24 tests, all passing**
+- Audit logging tested interactively via daemon (see DEMO.md)
+- Audit file output verified at `/tmp/ironnet_audit.log`

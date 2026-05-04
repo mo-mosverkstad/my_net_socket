@@ -381,6 +381,60 @@ ironctl> show stats
 
 ---
 
+## Audit Log Demo
+
+The audit log captures all security-relevant events automatically.
+
+### View audit log after ACL denies
+
+```
+ironctl> show audit-log
+--- Audit Log (last 3 events) ---
+  [17045] ACL_DENY             10.0.1.2:54321 -> 10.0.1.1:22 proto=6 rule 3
+  [17046] ACL_DENY             10.0.1.2:54322 -> 10.0.1.1:22 proto=6 rule 3
+  [17047] ACL_DENY             10.0.1.2:54323 -> 10.0.1.1:22 proto=6 rule 3
+```
+
+### JSON export for scripting
+
+```
+ironctl> show audit-log json
+[
+  {"ts":17045,"type":"ACL_DENY","src":"10.0.1.2","dst":"10.0.1.1","proto":6,"sport":54321,"dport":22,"detail":"rule 3"},
+  {"ts":17046,"type":"ACL_DENY","src":"10.0.1.2","dst":"10.0.1.1","proto":6,"sport":54322,"dport":22,"detail":"rule 3"}
+]
+
+ironctl> show stats json
+{
+  "l2.rx_frames": 47,
+  "l3.rx_packets": 35,
+  "l3.local_deliver": 20,
+  "l3.drops.acl": 3
+}
+```
+
+### Toggle audit logging
+
+```
+ironctl> audit disable
+[INFO ] [AUDIT] Audit logging disabled
+
+ironctl> audit enable
+[INFO ] [AUDIT] Audit logging enabled
+```
+
+### Audit log file
+
+Events are also written to `/tmp/ironnet_audit.log` in structured format:
+```
+17045|ACL_DENY|10.0.1.2|10.0.1.1|6|54321|22|rule 3
+17046|ACL_DENY|10.0.1.2|10.0.1.1|6|54322|22|rule 3
+```
+
+This file can be parsed by external tools for automated security analysis.
+
+---
+
 ## Test Documentation
 
 For a complete list of all unit tests and module tests, see `test.md`.
@@ -396,6 +450,7 @@ Key module tests with visible output:
 - `./tests/test_route_table_module` — Multiple routing tables with PBR selection
 - `./tests/test_conntrack_module` — Connection tracking state transitions
 - `./tests/test_nat_module` — SNAT/DNAT translation and return-path
+- `./tests/test_conntrack_module` and `test_nat_module` also validate audit integration indirectly
 
 To run all tests:
 ```bash

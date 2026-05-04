@@ -13,6 +13,8 @@
 #include "../ironstack/l4/tcp.h"
 #include "../ironstack/core/iface.h"
 #include "../ironstack/security/ipsec.h"
+#include "../ironmon/audit.h"
+#include "../ironmon/stats_json.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,6 +48,7 @@ static int cli_tokenize(char *line, char **argv, int max_args) {
 static void cmd_help(void) {
     printf("Available commands:\n");
     printf("  show stats              - Display counters\n");
+    printf("  show stats json         - Display counters as JSON\n");
     printf("  show routes             - Display routing table\n");
     printf("  show route-tables       - Display all routing tables\n");
     printf("  show arp                - Display ARP table\n");
@@ -54,11 +57,15 @@ static void cmd_help(void) {
     printf("  show nat                - Display NAT mappings\n");
     printf("  show interfaces         - Display interfaces\n");
     printf("  show ipsec              - Display IPsec SA/policies\n");
+    printf("  show audit-log          - Display recent security events\n");
+    printf("  show audit-log json     - Display security events as JSON\n");
     printf("  route add <prefix>/<len> via <next_hop> iface <idx>\n");
     printf("  route delete <prefix>/<len>\n");
     printf("  acl add <permit|deny> <tcp|udp|icmp|any> port <port>\n");
     printf("  acl delete <rule_id>\n");
     printf("  arp add <ip> <mac>\n");
+    printf("  audit enable            - Enable audit logging\n");
+    printf("  audit disable           - Disable audit logging\n");
     printf("  help                    - Show this help\n");
     printf("  exit                    - Stop the router\n");
 }
@@ -70,7 +77,11 @@ static void cmd_show(int argc, char **argv) {
     }
 
     if (strcmp(argv[1], "stats") == 0) {
-        iron_stats_dump();
+        if (argc >= 3 && strcmp(argv[2], "json") == 0) {
+            iron_stats_dump_json();
+        } else {
+            iron_stats_dump();
+        }
     } else if (strcmp(argv[1], "routes") == 0) {
         route_dump();
     } else if (strcmp(argv[1], "route-tables") == 0) {
@@ -99,6 +110,12 @@ static void cmd_show(int argc, char **argv) {
         }
     } else if (strcmp(argv[1], "ipsec") == 0) {
         ipsec_dump();
+    } else if (strcmp(argv[1], "audit-log") == 0) {
+        if (argc >= 3 && strcmp(argv[2], "json") == 0) {
+            audit_dump_json();
+        } else {
+            audit_dump();
+        }
     } else {
         printf("Unknown: show %s\n", argv[1]);
     }
@@ -238,6 +255,14 @@ int cli_execute(const char *line) {
         cmd_acl(argc, argv);
     } else if (strcmp(argv[0], "arp") == 0) {
         cmd_arp_cli(argc, argv);
+    } else if (strcmp(argv[0], "audit") == 0) {
+        if (argc >= 2 && strcmp(argv[1], "enable") == 0) {
+            audit_enable();
+        } else if (argc >= 2 && strcmp(argv[1], "disable") == 0) {
+            audit_disable();
+        } else {
+            printf("Usage: audit <enable|disable>\n");
+        }
     } else if (strcmp(argv[0], "exit") == 0 || strcmp(argv[0], "quit") == 0) {
         iron_request_shutdown();
         return -1; /* Signal to stop */

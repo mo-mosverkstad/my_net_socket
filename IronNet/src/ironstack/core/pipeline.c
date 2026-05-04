@@ -11,6 +11,7 @@
 #include "../l3/pbr.h"
 #include "../l3/ip_frag.h"
 #include "../l4/tcp.h"
+#include "../ironmon/audit.h"
 
 #include <unistd.h>
 
@@ -32,6 +33,7 @@ int iron_pipeline_init(void) {
     if (acl_init(ACL_DEFAULT_PERMIT) != 0) return -1;
     if (pbr_init() != 0) return -1;
     if (tcp_init() != 0) return -1;
+    audit_init(AUDIT_DEFAULT_FILE);
 
     /* Load config file if specified */
     if (g_conf_file) {

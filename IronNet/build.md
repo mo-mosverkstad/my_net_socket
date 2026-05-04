@@ -74,6 +74,7 @@ After startup, you'll see the `ironctl>` prompt. Type `help` for available comma
 
 ```
 show stats              - Display counters
+show stats json         - Display counters as JSON
 show routes             - Display routing table
 show interfaces         - Display interfaces
 show arp                - Display ARP table
@@ -81,11 +82,15 @@ show tcp                - Display TCP connections
 show conntrack          - Display connection tracking
 show nat                - Display NAT mappings
 show ipsec              - Display IPsec SA/policies
+show audit-log          - Display recent security events
+show audit-log json     - Display security events as JSON
 route add <prefix>/<len> via <next_hop> iface <idx>
 route delete <prefix>/<len>
 acl add <permit|deny> <tcp|udp|icmp|any> port <port>
 acl delete <rule_id>
 arp add <ip> <mac>
+audit enable            - Enable audit logging
+audit disable           - Disable audit logging
 exit                    - Stop the router
 ```
 
@@ -237,6 +242,7 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | test_nat_module | `build/tests/test_nat_module` | Module test | NAT integration test |
 | libiron_common.a | `build/common/libiron_common.a` | Library | Shared utility library |
 | libiron_cli.a | `build/ironctl/libiron_cli.a` | Library | Embedded CLI library |
+| libiron_mon.a | `build/ironmon/libiron_mon.a` | Library | Telemetry & audit library |
 
 ---
 
