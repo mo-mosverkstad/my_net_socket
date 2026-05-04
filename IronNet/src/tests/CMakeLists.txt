@@ -97,6 +97,38 @@ target_include_directories(test_nat PRIVATE
 )
 target_link_libraries(test_nat iron_common)
 
+add_executable(test_defense unit/test_defense.c)
+target_include_directories(test_defense PRIVATE
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+    ${CMAKE_SOURCE_DIR}
+)
+target_link_libraries(test_defense iron_common)
+
+add_executable(test_audit unit/test_audit.c)
+target_include_directories(test_audit PRIVATE
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+    ${CMAKE_SOURCE_DIR}
+)
+target_link_libraries(test_audit iron_common)
+
+add_executable(test_app_socket unit/test_app_socket.c)
+target_include_directories(test_app_socket PRIVATE
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+    ${CMAKE_SOURCE_DIR}
+)
+target_link_libraries(test_app_socket iron_common)
+
+add_executable(test_dns unit/test_dns.c)
+target_include_directories(test_dns PRIVATE
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+    ${CMAKE_SOURCE_DIR}
+)
+target_link_libraries(test_dns iron_common)
+
 # Module tests
 add_executable(test_l2_module module/test_l2_module.c stubs/defense_stub.c stubs/audit_stub.c)
 target_include_directories(test_l2_module PRIVATE
@@ -182,6 +214,15 @@ target_include_directories(test_nat_module PRIVATE
 )
 target_link_libraries(test_nat_module iron_common)
 
+add_executable(test_security_module module/test_security_module.c)
+target_include_directories(test_security_module PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/module
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+    ${CMAKE_SOURCE_DIR}
+)
+target_link_libraries(test_security_module iron_common)
+
 enable_testing()
 
 # Unit tests
@@ -199,6 +240,10 @@ add_test(NAME test_pbr COMMAND test_pbr)
 add_test(NAME test_route_table COMMAND test_route_table)
 add_test(NAME test_conntrack COMMAND test_conntrack)
 add_test(NAME test_nat COMMAND test_nat)
+add_test(NAME test_defense COMMAND test_defense)
+add_test(NAME test_audit COMMAND test_audit)
+add_test(NAME test_app_socket COMMAND test_app_socket)
+add_test(NAME test_dns COMMAND test_dns)
 
 # Module tests
 add_test(NAME module_l2 COMMAND test_l2_module)
@@ -211,3 +256,4 @@ add_test(NAME module_bridge COMMAND test_bridge_module)
 add_test(NAME module_route_table COMMAND test_route_table_module)
 add_test(NAME module_conntrack COMMAND test_conntrack_module)
 add_test(NAME module_nat COMMAND test_nat_module)
+add_test(NAME module_security COMMAND test_security_module)

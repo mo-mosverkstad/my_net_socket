@@ -99,6 +99,7 @@ load <tcp|route|acl|bw> [count]     - Stress test a subsystem
 defense <name> <enable|disable>     - Toggle a defense mechanism
 defense rate-limit <N>/s            - Set per-source SYN rate limit
 defense show                        - Show all defense states
+help                    - Show this help
 exit                    - Stop the router
 ```
 
@@ -238,6 +239,10 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | test_route_table | `build/tests/test_route_table` | Unit test | Multiple routing tables correctness |
 | test_conntrack | `build/tests/test_conntrack` | Unit test | Connection tracking correctness |
 | test_nat | `build/tests/test_nat` | Unit test | NAT SNAT/DNAT correctness |
+| test_defense | `build/tests/test_defense` | Unit test | Defense module (SYN cookies, rate limit) correctness |
+| test_audit | `build/tests/test_audit` | Unit test | Audit ring buffer, enable/disable, event retrieval |
+| test_app_socket | `build/tests/test_app_socket` | Unit test | App socket listener registration and lookup |
+| test_dns | `build/tests/test_dns` | Unit test | DNS zone table lookup correctness |
 | test_l2_module | `build/tests/test_l2_module` | Module test | L2 visible integration test |
 | test_l3_module | `build/tests/test_l3_module` | Module test | L3 IP/ICMP visible integration test |
 | test_pbr_acl_module | `build/tests/test_pbr_acl_module` | Module test | PBR & ACL visible integration test |
@@ -248,6 +253,7 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | test_route_table_module | `build/tests/test_route_table_module` | Module test | Multiple routing tables integration test |
 | test_conntrack_module | `build/tests/test_conntrack_module` | Module test | Connection tracking integration test |
 | test_nat_module | `build/tests/test_nat_module` | Module test | NAT integration test |
+| test_security_module | `build/tests/test_security_module` | Module test | Security tools (fuzz, route stress) integration test |
 | libiron_common.a | `build/common/libiron_common.a` | Library | Shared utility library |
 | libiron_cli.a | `build/ironctl/libiron_cli.a` | Library | Embedded CLI library |
 | libiron_mon.a | `build/ironmon/libiron_mon.a` | Library | Telemetry & audit library |

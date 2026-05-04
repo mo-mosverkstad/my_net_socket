@@ -71,6 +71,12 @@ static dns_zone_entry_t *dns_lookup(const char *name) {
     return NULL;
 }
 
+/* Public lookup for testing */
+uint32_t dns_zone_lookup(const char *name) {
+    dns_zone_entry_t *z = dns_lookup(name);
+    return z ? z->ip : 0;
+}
+
 /* Build DNS response */
 static int dns_build_response(const uint8_t *query, int query_len,
                               uint32_t answer_ip, uint8_t *resp, int resp_max) {

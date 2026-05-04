@@ -12,9 +12,9 @@ ctest --output-on-failure
 ../src/tests/run_module_tests.sh .
 ```
 
-**Current total: 24 tests (14 unit + 10 module), all passing.**
+**Current total: 29 tests (18 unit + 11 module), all passing.**
 
-Note: The CLI (ironctl), audit logging (ironmon), application servers (ironapps: echo port 7, DNS port 53, KV port 6379, HTTP port 8080, RPC port 9000), network scanner (ironprobe), protocol fuzzer (ironfuzz), and stress tester (ironload) are tested interactively via the daemon, not via CTest. See `DEMO.md` for usage examples.
+Note: The CLI (ironctl), audit logging (ironmon), application servers (ironapps: echo port 7, DNS port 53, KV port 6379, HTTP port 8080, RPC port 9000), network scanner (ironprobe), protocol fuzzer (ironfuzz), stress tester (ironload), and external attack tool (ironattack) are tested interactively via the daemon, not via CTest. See `DEMO.md` for usage examples.
 
 ---
 
@@ -162,6 +162,43 @@ Unit tests are fast, minimal-output correctness checks. Each validates a single 
 | test_snat_reuses_mapping | Same flow reuses existing mapping |
 | test_different_flows_different_ports | Different hosts get different allocated ports |
 
+### test_defense (5 assertions)
+
+| Test | What it verifies |
+|------|------------------|
+| test_init_all_disabled | All 8 defenses start disabled after init |
+| test_enable_disable | Enable/disable toggles correctly |
+| test_syncookie_generate_validate | Cookie generated, validated with correct ack, rejected with wrong ack |
+| test_rate_limit | Per-source rate cap enforced, different sources independent, tick resets |
+| test_unknown_defense | Unknown defense name returns false/error |
+
+### test_audit (5 assertions)
+
+| Test | What it verifies |
+|------|------------------|
+| test_log_and_retrieve | Event logged to ring buffer, all fields correct |
+| test_ring_buffer_wraps | Ring wraps at 256, oldest overwritten, newest preserved |
+| test_disable_suppresses | Disabled audit produces no events |
+| test_enable_resumes | Re-enabled audit captures new events |
+| test_multiple_types | Different event types stored and retrieved correctly |
+
+### test_app_socket (4 assertions)
+
+| Test | What it verifies |
+|------|------------------|
+| test_listen_and_find | Register listener, find by protocol+port |
+| test_find_wrong_port | Wrong port returns NULL |
+| test_find_wrong_protocol | Wrong protocol returns NULL |
+| test_multiple_listeners | Multiple listeners coexist, each found independently |
+
+### test_dns (3 assertions)
+
+| Test | What it verifies |
+|------|------------------|
+| test_zone_lookup_found | "ironnet.local" resolves to non-zero IP |
+| test_zone_lookup_not_found | "nonexistent.com" returns 0 |
+| test_zone_multiple_entries | All 3+ zone entries resolve correctly |
+
 ---
 
 ## Module Tests
@@ -255,6 +292,14 @@ Module tests produce verbose output with hex dumps, decoded fields, and visible 
 | Multiple hosts share IP | 3 hosts get different ports on same public IP |
 | No rule pass-through | No NAT configured → packet unchanged |
 
+### test_security_module (3 test cases)
+
+| Test | What it demonstrates |
+|------|---------------------|
+| Fuzz no crash (500 iters) | 3 seeds, 500 mutations, 0 crashes |
+| Fuzz mutation changes data | 50 mutations all produce different output |
+| Route stress (100 routes) | 100 routes added, all lookups succeed, non-existent fails |
+
 ---
 
 ## Live Demo
@@ -289,6 +334,10 @@ ctest --output-on-failure
 ./tests/test_route_table
 ./tests/test_conntrack
 ./tests/test_nat
+./tests/test_defense
+./tests/test_audit
+./tests/test_app_socket
+./tests/test_dns
 
 # Single module test (verbose)
 ./tests/test_l2_module
@@ -301,6 +350,7 @@ ctest --output-on-failure
 ./tests/test_route_table_module
 ./tests/test_conntrack_module
 ./tests/test_nat_module
+./tests/test_security_module
 
 # All module tests via script
 ../src/tests/run_module_tests.sh .

@@ -2970,8 +2970,8 @@ sudo ./ironattack/ironattack syn-flood --target 10.0.1.1 --port 7 --rate 1000 --
 ### Current test summary
 
 After Phase 13a:
-- **14 unit tests + 10 module tests = 24 tests, all passing**
-- Defense module tested interactively via CLI
+- **15 unit tests + 11 module tests = 26 tests, all passing**
+- Defense module tested via unit test (test_defense) and interactively via CLI
 - ironattack binary built and functional (requires TAP for real use)
 - SYN cookies proven effective: connection table stays empty under flood
 
@@ -3034,6 +3034,11 @@ sudo ./ironattack vlan-hop --target 10.0.1.1 --target-vlan 20 --outer-vlan 1 --c
 ### Current test summary
 
 After Phase 13b:
-- **14 unit tests + 10 module tests = 24 tests, all passing**
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- New: `test_defense` (unit) — SYN cookies, rate limiting, enable/disable
+- New: `test_security_module` (module) — fuzz engine, mutation, route stress
+- New: `test_audit` (unit) — ring buffer, enable/disable, event retrieval
+- New: `test_app_socket` (unit) — listener registration and lookup
+- New: `test_dns` (unit) — DNS zone table lookup
 - ironattack binary has 3 subcommands: syn-flood, arp-spoof, vlan-hop
 - ARP inspection and VLAN strict defenses integrated into data plane

@@ -694,6 +694,128 @@ ironctl> show stats
 # See tcp.drops.resource counter (before defense)
 ```
 
+### ARP Spoofing Attack + Defense
+
+The `arp-spoof` subcommand injects fake ARP replies to poison the router's ARP table, making it believe a gateway IP belongs to the attacker's MAC.
+
+**Terminal 1: Start router**
+```bash
+sudo ./ironstack/ironstack -d ../src/configs/router.conf
+```
+
+**Terminal 2: Run ARP spoof (without defense)**
+```bash
+sudo ./ironattack/ironattack arp-spoof --target 10.0.1.1 --impersonate 10.0.1.254 --count 3
+```
+
+Output:
+```
+=== ARP Spoof Attack ===
+  Target:      10.0.1.1
+  Impersonate: 10.0.1.254
+  Iface:       iron0
+  Count:       3
+
+  Sent: 3 ARP replies
+```
+
+**Terminal 1: Check ARP table — POISONED**
+```
+ironctl> show arp
+[INFO ] [ARP] --- ARP Table ---
+[INFO ] [ARP]   10.0.1.254 -> 02:AA:BB:CC:DD:EE    ← attacker's MAC!
+```
+
+The router now thinks the gateway (10.0.1.254) is at the attacker's MAC. Traffic destined for the gateway would be sent to the attacker instead.
+
+**Terminal 1: Enable ARP inspection defense**
+```
+ironctl> defense arp-inspection enable
+[INFO ] [DEFENSE] Defense 'arp-inspection' ENABLED
+```
+
+**Terminal 2: Run ARP spoof again (with defense)**
+```bash
+sudo ./ironattack/ironattack arp-spoof --target 10.0.1.1 --impersonate 10.0.1.254 --count 3
+```
+
+**Terminal 1: ARP table unchanged, attack blocked**
+```
+[WARN ] [ARP] ARP inspection BLOCKED: 10.0.1.254 untrusted MAC 02:AA:BB:CC:DD:EE
+[WARN ] [ARP] ARP inspection BLOCKED: 10.0.1.254 untrusted MAC 02:AA:BB:CC:DD:EE
+[WARN ] [ARP] ARP inspection BLOCKED: 10.0.1.254 untrusted MAC 02:AA:BB:CC:DD:EE
+
+ironctl> show arp
+# ARP table NOT updated — attack blocked
+
+ironctl> show audit-log
+# Shows AUDIT_ARP_ANOMALY events for each blocked attempt
+```
+
+Note: ARP inspection requires trusted bindings. The router's own interface MACs are implicitly trusted. For external gateways, add trusted bindings via config or CLI.
+
+### VLAN Hopping Attack + Defense
+
+The `vlan-hop` subcommand sends double-tagged 802.1Q frames to escape VLAN isolation. The outer tag matches the native VLAN (stripped by the first switch), exposing the inner tag which routes the frame into the target VLAN.
+
+**Terminal 1: Start router**
+```bash
+sudo ./ironstack/ironstack -d ../src/configs/router.conf
+```
+
+**Terminal 2: Run VLAN hop (without defense)**
+```bash
+sudo ./ironattack/ironattack vlan-hop --target 10.0.1.1 --target-vlan 20 --outer-vlan 1 --count 5
+```
+
+Output:
+```
+=== VLAN Hopping Attack ===
+  Target:      10.0.1.1
+  Outer VLAN:  1 (native)
+  Inner VLAN:  20 (target)
+  Iface:       iron0
+  Count:       5
+
+  Sent: 5 double-tagged frames
+```
+
+**Terminal 1: Without defense, frames may be processed**
+```
+[DEBUG] [L2] Dispatching IPv4 packet
+# The double-tagged frame's outer tag (VLAN 1) is at offset 12
+# Without strict mode, the frame might be parsed (ethertype 0x8100 is unknown → dropped)
+# But in a real switch topology, the outer tag would be stripped and inner tag would route to VLAN 20
+```
+
+**Terminal 1: Enable VLAN strict mode**
+```
+ironctl> defense vlan-strict enable
+[INFO ] [DEFENSE] Defense 'vlan-strict' ENABLED
+```
+
+**Terminal 2: Run VLAN hop again (with defense)**
+```bash
+sudo ./ironattack/ironattack vlan-hop --target 10.0.1.1 --target-vlan 20 --count 5
+```
+
+**Terminal 1: All double-tagged frames dropped at ingress**
+```
+[WARN ] [L2] VLAN strict: tagged frame dropped (TPID 0x8100)
+[WARN ] [L2] VLAN strict: tagged frame dropped (TPID 0x8100)
+[WARN ] [L2] VLAN strict: tagged frame dropped (TPID 0x8100)
+[WARN ] [L2] VLAN strict: tagged frame dropped (TPID 0x8100)
+[WARN ] [L2] VLAN strict: tagged frame dropped (TPID 0x8100)
+
+ironctl> show audit-log
+# Shows AUDIT_VLAN_MISMATCH events for each dropped frame
+
+ironctl> show stats
+# l2.rx_drops counter increased by 5
+```
+
+VLAN strict mode rejects ANY frame with TPID 0x8100 at the Ethernet header, preventing double-tagged VLAN hopping attacks at the earliest possible point in the pipeline.
+
 ### Audit log file
 
 Events are also written to `/tmp/ironnet_audit.log` in structured format:
@@ -766,6 +888,8 @@ To run all tests:
 cd IronNet/build
 ctest --output-on-failure
 ```
+
+Expected: 29 tests (18 unit + 11 module), all passing.
 
 To run module tests with verbose output:
 ```bash
