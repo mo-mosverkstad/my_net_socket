@@ -1517,3 +1517,150 @@ After Phase 7, the project has:
 - **5 module tests**: test_l2_module, test_l3_module, test_pbr_acl_module, test_l4_module, test_ipsec_module
 - **Total: 11 tests, all passing**
 - **Live demo**: virtual router with real TAP interfaces on WSL
+
+---
+
+## Phase 8a: VLAN (802.1Q)
+
+### What was done
+
+We implemented IEEE 802.1Q VLAN tagging — the standard mechanism for segmenting Layer 2 traffic into isolated virtual LANs on a single physical network.
+
+### Concepts explained
+
+**What is a VLAN?**
+
+A VLAN (Virtual LAN) divides a physical network into multiple isolated broadcast domains. Devices in VLAN 10 cannot communicate at Layer 2 with devices in VLAN 20, even if they're on the same physical switch.
+
+**802.1Q tag format:**
+
+The VLAN tag is a 4-byte field inserted between the source MAC and the original EtherType in an Ethernet frame:
+
+```
+Normal frame:  [Dst MAC 6B][Src MAC 6B][EtherType 2B][Payload...]
+Tagged frame:  [Dst MAC 6B][Src MAC 6B][TPID 2B][TCI 2B][EtherType 2B][Payload...]
+```
+
+- **TPID** (Tag Protocol Identifier) = 0x8100 (identifies this as a VLAN-tagged frame)
+- **TCI** (Tag Control Information) = PCP (3 bits) + DEI (1 bit) + VID (12 bits)
+- **VID** (VLAN Identifier) = 0–4095 (12 bits, 4094 usable VLANs)
+
+**Port modes:**
+
+- **Access port**: connects to end devices (PCs, servers). Frames are untagged. The port assigns a VLAN ID to all incoming frames.
+- **Trunk port**: connects switches together. Frames are tagged with their VLAN ID. Carries multiple VLANs over a single link.
+
+**Ingress processing:**
+- Access port + untagged frame → assign port's VLAN ID
+- Access port + tagged frame (wrong VLAN) → DROP
+- Trunk port + tagged frame (allowed VLAN) → strip tag, pass with VLAN ID
+- Trunk port + untagged frame → DROP
+- Trunk port + tagged frame (VLAN not allowed) → DROP
+
+**Egress processing:**
+- Access port → send untagged (only if frame's VLAN matches port's VLAN)
+- Trunk port → insert VLAN tag (only if VLAN is in allowed list)
+
+### Files created
+
+#### `src/ironstack/l2/vlan.h` — VLAN interface
+
+Defines:
+- `vlan_tag_t` — packed struct: TPID (2 bytes) + TCI (2 bytes)
+- `vlan_port_t` — port config: mode (access/trunk), access VLAN, trunk allowed bitmap
+- `vlan_port_mode_t` — ACCESS or TRUNK
+
+API:
+- `vlan_init()` — initialize port table
+- `vlan_port_set_access(port_idx, vlan_id)` — configure as access port
+- `vlan_port_set_trunk(port_idx, allowed_vlans, count)` — configure as trunk port
+- `vlan_port_get(port_idx)` — get port config
+- `vlan_ingress(frame, frame_len, port_idx, *vlan_id)` — process incoming frame (strip tag if needed, return VLAN ID)
+- `vlan_egress(frame, frame_len, port_idx, vlan_id, out_buf, out_buf_len)` — process outgoing frame (insert tag if needed)
+
+Helper inlines:
+- `vlan_get_vid(tag)` — extract 12-bit VID from TCI
+- `vlan_make_tci(vid)` — build TCI from VID
+
+#### `src/ironstack/l2/vlan.c` — VLAN implementation
+
+**Trunk allowed VLAN bitmap:**
+
+Instead of storing a list of allowed VLANs, we use a bitmap (4096 bits = 256 uint16_t). This makes VLAN membership check O(1):
+```c
+bool trunk_allows_vlan(port, vid) {
+    return (port->trunk_allowed[vid / 16] & (1 << (vid % 16))) != 0;
+}
+```
+
+**Ingress tag stripping:**
+
+When a tagged frame arrives on a trunk port, the 4-byte VLAN tag is removed in-place:
+1. Move the first 12 bytes (dst+src MAC) forward by 4 positions
+2. Reduce frame length by 4
+3. Result: EtherType is back at offset 12 (normal position)
+
+**Egress tag insertion:**
+
+When a frame leaves via a trunk port, the 4-byte tag is inserted:
+1. Copy dst+src MAC (12 bytes) to output
+2. Write TPID (0x8100) + TCI (VID) at offset 12
+3. Copy original EtherType + payload starting at offset 16
+4. Output is 4 bytes longer than input
+
+### Tests created
+
+#### `src/tests/unit/test_vlan.c` — VLAN unit tests (7 tests)
+
+- `test_access_port_untagged` — untagged frame on access port gets VLAN assigned
+- `test_access_port_wrong_vlan_tag` — tagged frame with wrong VLAN on access port → dropped
+- `test_trunk_port_tagged` — tagged frame on trunk port → tag stripped, VLAN extracted
+- `test_trunk_port_vlan_not_allowed` — tagged frame with disallowed VLAN → dropped
+- `test_trunk_port_untagged_dropped` — untagged frame on trunk port → dropped
+- `test_egress_trunk_inserts_tag` — egress on trunk port inserts 4-byte VLAN tag
+- `test_egress_access_no_tag` — egress on access port sends untagged
+
+#### `src/tests/module/test_vlan_module.c` — VLAN module test (4 test cases)
+
+**Test 1: Trunk egress inserts VLAN tag**
+- Shows original untagged frame hex
+- Shows frame after tag insertion: TPID=8100, TCI=0014 (VID=20)
+- Original EtherType moved from offset 12 to offset 16
+
+**Test 2: Trunk ingress strips VLAN tag**
+- Shows tagged frame with VLAN 10 (81 00 00 0A at offset 12)
+- After stripping: EtherType back at offset 12, frame 4 bytes shorter
+
+**Test 3: Access port assigns VLAN to untagged frame**
+- Untagged frame arrives on access port configured for VLAN 100
+- VLAN ID 100 assigned, frame unchanged
+
+**Test 4: VLAN isolation (wrong VLAN dropped)**
+- Tagged frame with VLAN 20 arrives on access port configured for VLAN 10
+- Result: DROPPED
+
+### Current test summary
+
+After Phase 8a, the project has:
+- **7 unit tests**: test_stats, test_eth, test_route, test_acl, test_tcp, test_ipsec, test_vlan
+- **6 module tests**: test_l2_module, test_l3_module, test_pbr_acl_module, test_l4_module, test_ipsec_module, test_vlan_module
+- **Total: 13 tests, all passing**
+
+### Integration note
+
+VLAN is currently a standalone module with its own API. It is not yet integrated into the main pipeline (`eth_dispatch`). Integration will happen when the Bridge (Phase 8b) is implemented, since the bridge needs VLAN awareness to forward frames within the correct VLAN.
+
+### How to run Phase 8a tests
+
+```bash
+cd IronNet/build
+
+# VLAN unit test
+./tests/test_vlan
+
+# VLAN module test (verbose with hex dumps)
+./tests/test_vlan_module
+
+# All tests
+ctest --output-on-failure
+```

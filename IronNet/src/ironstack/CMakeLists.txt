@@ -7,6 +7,7 @@ add_executable(ironstack
     io/vnic.c
     l2/eth.c
     l2/arp.c
+    l2/vlan.c
     l3/ip.c
     l3/route.c
     l3/icmp.c
