@@ -8,6 +8,7 @@ add_executable(ironstack
     l2/eth.c
     l2/arp.c
     l2/vlan.c
+    l2/bridge.c
     l3/ip.c
     l3/route.c
     l3/icmp.c

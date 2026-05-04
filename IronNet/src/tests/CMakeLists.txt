@@ -44,6 +44,34 @@ target_include_directories(test_vlan PRIVATE
 )
 target_link_libraries(test_vlan iron_common)
 
+add_executable(test_arp unit/test_arp.c)
+target_include_directories(test_arp PRIVATE
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+)
+target_link_libraries(test_arp iron_common)
+
+add_executable(test_ip_frag unit/test_ip_frag.c)
+target_include_directories(test_ip_frag PRIVATE
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+)
+target_link_libraries(test_ip_frag iron_common)
+
+add_executable(test_iface unit/test_iface.c)
+target_include_directories(test_iface PRIVATE
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+)
+target_link_libraries(test_iface iron_common)
+
+add_executable(test_pbr unit/test_pbr.c)
+target_include_directories(test_pbr PRIVATE
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+)
+target_link_libraries(test_pbr iron_common)
+
 # Module tests
 add_executable(test_l2_module module/test_l2_module.c)
 target_include_directories(test_l2_module PRIVATE
@@ -93,6 +121,14 @@ target_include_directories(test_vlan_module PRIVATE
 )
 target_link_libraries(test_vlan_module iron_common)
 
+add_executable(test_bridge_module module/test_bridge_module.c)
+target_include_directories(test_bridge_module PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/module
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+)
+target_link_libraries(test_bridge_module iron_common)
+
 enable_testing()
 
 # Unit tests
@@ -103,6 +139,10 @@ add_test(NAME test_acl COMMAND test_acl)
 add_test(NAME test_tcp COMMAND test_tcp)
 add_test(NAME test_ipsec COMMAND test_ipsec)
 add_test(NAME test_vlan COMMAND test_vlan)
+add_test(NAME test_arp COMMAND test_arp)
+add_test(NAME test_ip_frag COMMAND test_ip_frag)
+add_test(NAME test_iface COMMAND test_iface)
+add_test(NAME test_pbr COMMAND test_pbr)
 
 # Module tests
 add_test(NAME module_l2 COMMAND test_l2_module)
@@ -111,3 +151,4 @@ add_test(NAME module_pbr_acl COMMAND test_pbr_acl_module)
 add_test(NAME module_l4 COMMAND test_l4_module)
 add_test(NAME module_ipsec COMMAND test_ipsec_module)
 add_test(NAME module_vlan COMMAND test_vlan_module)
+add_test(NAME module_bridge COMMAND test_bridge_module)

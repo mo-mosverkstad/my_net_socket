@@ -326,6 +326,29 @@ This phase is split into 5 sub-phases due to its scope.
 
 ### Phase 8a: VLAN (802.1Q) (Week 19)
 
+#### Concepts
+
+A **VLAN (Virtual LAN)** divides a physical network into multiple isolated broadcast domains. Devices in VLAN 10 cannot communicate at Layer 2 with devices in VLAN 20, even if they share the same physical switch or cable.
+
+**802.1Q** is the IEEE standard that defines how VLAN membership is carried in Ethernet frames by inserting a 4-byte tag:
+
+```
+Normal frame:  [Dst MAC 6B][Src MAC 6B][EtherType 2B][Payload...]
+Tagged frame:  [Dst MAC 6B][Src MAC 6B][TPID 2B][TCI 2B][EtherType 2B][Payload...]
+```
+
+- **TPID** = 0x8100 (identifies a VLAN-tagged frame)
+- **TCI** = PCP (3 bits, priority) + DEI (1 bit) + **VID** (12 bits, VLAN ID 0–4095)
+
+**Port modes:**
+- **Access port** — connects to end devices (PCs, servers). Frames are untagged on the wire. The switch assigns a VLAN ID internally.
+- **Trunk port** — connects switches together. Frames carry VLAN tags so multiple VLANs share one link.
+
+**Why VLANs matter for security research:**
+- VLAN hopping attacks (double-tagging to escape isolation)
+- Misconfigured trunk ports leaking traffic between VLANs
+- ACL bypass via VLAN manipulation
+
 #### Goals
 - Implement 802.1Q VLAN tagging and trunk/access port modes
 
@@ -353,6 +376,36 @@ This phase is split into 5 sub-phases due to its scope.
 ---
 
 ### Phase 8b: Bridge (L2 Forwarding) (Week 19–20)
+
+#### Concepts
+
+A **bridge** (or Layer 2 switch) connects multiple ports and forwards Ethernet frames between them based on MAC addresses. Unlike a hub (which floods everything), a bridge **learns** which MAC addresses are reachable on which port and forwards unicast traffic only to the correct port.
+
+**MAC learning:**
+- When a frame arrives on port X with source MAC AA:BB:CC:DD:EE:FF, the bridge records: "MAC AA:BB:CC:DD:EE:FF is reachable via port X"
+- This mapping is stored in the **MAC address table** (also called FDB — Forwarding Database)
+- Entries age out after a timeout (typically 300 seconds) to handle devices moving between ports
+
+**Forwarding decisions:**
+- **Known unicast** — destination MAC is in the table → forward to the learned port only
+- **Unknown unicast** — destination MAC not in the table → flood to all ports (except ingress)
+- **Broadcast** (FF:FF:FF:FF:FF:FF) → flood to all ports (except ingress)
+- **Multicast** (bit 0 of first byte = 1) → flood to all ports (except ingress)
+
+**VLAN-aware bridging:**
+- A bridge only forwards frames within the **same VLAN**
+- Flooding only goes to ports that belong to the frame's VLAN
+- This enforces VLAN isolation at Layer 2
+
+**Loop prevention:**
+- If two switches are connected by multiple links, frames can loop forever (broadcast storm)
+- Real networks use STP (Spanning Tree Protocol) to block redundant paths
+- IronNet uses simplified loop detection (TTL-based or port blocking)
+
+**Why bridges matter for security research:**
+- MAC flooding attacks (overflow the MAC table → bridge falls back to flooding → attacker sees all traffic)
+- MAC spoofing (impersonate another device's MAC to intercept traffic)
+- CAM table exhaustion (denial of service)
 
 #### Goals
 - Build a software bridge for L2 forwarding within a VLAN

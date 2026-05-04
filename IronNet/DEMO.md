@@ -201,3 +201,20 @@ After stopping ironstack (Ctrl+C), the TAP interfaces are automatically removed.
 sudo ip link delete iron0
 sudo ip link delete iron1
 ```
+
+---
+
+## Test Documentation
+
+For a complete list of all unit tests and module tests, see `test.md`.
+
+To run all tests:
+```bash
+cd IronNet/build
+ctest --output-on-failure
+```
+
+To run module tests with verbose output:
+```bash
+../src/tests/run_module_tests.sh .
+```

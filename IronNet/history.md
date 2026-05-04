@@ -1664,3 +1664,98 @@ cd IronNet/build
 # All tests
 ctest --output-on-failure
 ```
+
+---
+
+## Phase 8b: Bridge (L2 Forwarding)
+
+### What was done
+
+We implemented a software bridge (Layer 2 switch) that forwards Ethernet frames between ports based on MAC address learning, with VLAN-aware isolation.
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironstack/l2/bridge.h` | Bridge structure, MAC table, forwarding API |
+| `ironstack/l2/bridge.c` | MAC learning, unicast forwarding, broadcast flooding, VLAN-aware, aging |
+| `tests/module/test_bridge_module.c` | 4 module tests |
+
+### Bridge implementation details
+
+**MAC learning table:**
+- Up to 256 entries per bridge
+- Each entry: MAC address + port + VLAN ID + timestamp
+- Learning: when a frame arrives, record src MAC → ingress port
+- Aging: entries expire after 300 seconds via `bridge_timer_tick()`
+- When table is full, oldest entry is overwritten
+
+**Forwarding decisions:**
+- Known unicast: forward to learned port only
+- Unknown unicast: flood to all ports in same VLAN (except ingress)
+- Broadcast/multicast: flood to all ports in same VLAN (except ingress)
+- Same-port (hairpin): drop (don't send back to where it came from)
+
+**VLAN-aware bridging:**
+- Flooding only reaches ports in the same VLAN
+- Access ports only receive frames matching their configured VLAN
+- Trunk ports use `vlan_egress()` to insert tags before sending
+
+**Statistics per bridge:**
+- `frames_forwarded` — known unicast sent to correct port
+- `frames_flooded` — broadcast/unknown unicast flooded
+- `frames_dropped` — hairpin or invalid frames
+
+### Test gap-filling (also done in this phase)
+
+In addition to the bridge, we filled test coverage gaps from earlier phases by creating these unit tests:
+
+| New Unit Test | Module | Tests |
+|---------------|--------|-------|
+| `test_arp.c` | ARP (Phase 7) | add/resolve, unknown sends request, reply handling, entry update |
+| `test_ip_frag.c` | IP Fragmentation (Phase 7) | no frag needed, fragmentation, DF flag, reassembly |
+| `test_iface.c` | Interface config (Phase 7) | add/get, find by IP, find by name, is_local_ip |
+| `test_pbr.c` | PBR (Phase 4) | match, no match, loop detection, delete |
+
+### Module test: test_bridge_module (4 test cases)
+
+**Test 1: MAC learning and unicast forwarding**
+- Frame A→B arrives on port 0 (B unknown) → flooded to ports 1,2
+- Frame B→A arrives on port 1 (A learned on port 0) → forwarded to port 0 only
+
+**Test 2: Broadcast flooding**
+- Broadcast frame on port 0 → flooded to ports 1,2 (not back to port 0)
+
+**Test 3: VLAN isolation**
+- Port 0,1 = VLAN 10, Port 2 = VLAN 20
+- Broadcast from port 0 (VLAN 10) → only reaches port 1, not port 2
+
+**Test 4: Same-port drop (no hairpin)**
+- MAC B learned on port 0, frame from port 0 to B → dropped (not sent back)
+
+### Current test summary
+
+After Phase 8b + test gap-filling:
+- **11 unit tests**: test_stats, test_eth, test_route, test_acl, test_tcp, test_ipsec, test_vlan, test_arp, test_ip_frag, test_iface, test_pbr
+- **7 module tests**: test_l2_module, test_l3_module, test_pbr_acl_module, test_l4_module, test_ipsec_module, test_vlan_module, test_bridge_module
+- **Total: 18 tests, all passing**
+
+A comprehensive `test.md` file was created documenting every test case.
+
+### How to run Phase 8b tests
+
+```bash
+cd IronNet/build
+
+# Bridge module test (verbose)
+./tests/test_bridge_module
+
+# All new unit tests
+./tests/test_arp
+./tests/test_ip_frag
+./tests/test_iface
+./tests/test_pbr
+
+# All tests
+ctest --output-on-failure
+```
