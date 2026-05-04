@@ -950,6 +950,8 @@ Dynamic routing protocols (OSPF, BGP) are **out of scope** for IronNet. The proj
 
 ## Phase 13: Attack Simulation & Defense (Week 35–40)
 
+This phase is split into 5 sub-phases due to its scope.
+
 ### Key difference from Phase 12
 
 | Aspect | Phase 12 (Security Testing) | Phase 13 (Attack & Defense) |
@@ -967,8 +969,8 @@ Terminal 1: Router (target)
   sudo ./ironstack/ironstack ../src/configs/router.conf
 
 Terminal 2: Attack tools (attacker)
-  sudo ./ironattack --syn-flood 10.0.1.1 --rate 1000
-  sudo ./ironattack --arp-spoof 10.0.1.1 --gateway 10.0.1.254
+  sudo ./ironattack syn-flood --target 10.0.1.1 --port 7 --rate 1000
+  sudo ./ironattack arp-spoof --target 10.0.1.1 --impersonate 10.0.1.254
   sudo ./ironprobe-ext --target 10.0.1.1 --ports 1-65535
 
 Terminal 3: Monitor
@@ -989,98 +991,323 @@ Attack tools are **separate binaries** that:
 - Provide a structured penetration testing workflow
 - All attacks use **real packets** through the TAP interface (not internal injection)
 
-### Tasks
+### Attack-defense matrix
 
-1. **Attack tools — ironattack (separate binary)**
+| Attack | Defense | Metric |
+|--------|---------|--------|
+| SYN flood | SYN cookies + rate limit | Connection table usage under attack |
+| ARP spoofing | ARP inspection | Poisoned entries detected/blocked |
+| VLAN hopping | VLAN strict mode | Double-tagged frames dropped |
+| IP spoofing | Source IP validation (uRPF) | Spoofed packets dropped |
+| TCP RST injection | Connection tracking + RST validation | Forged RSTs rejected |
+| ICMP redirect | ICMP redirect disable | Routing table unchanged |
+| Slowloris | Connection timeout + rate limit | Resources recovered |
+| Fragmentation | Fragment validation | Overlapping/tiny frags dropped |
 
-   Each attack is a subcommand:
+### Penetration testing workflow
+
+- **Reconnaissance**: `ironprobe-ext` scans to discover services and ACL gaps
+- **Enumeration**: identify open ports, protocol versions, service fingerprints
+- **Exploitation**: `ironattack` tests specific vulnerabilities
+- **Post-exploitation**: verify what access was gained, lateral movement
+- **Reporting**: automated test results with pass/fail per defense
+
+---
+
+### Phase 13a: Infrastructure + SYN Flood Attack/Defense (Week 35–36)
+
+#### Goals
+- Build the ironattack binary skeleton with TAP-based packet crafting
+- Implement SYN flood attack (first external attack)
+- Implement SYN cookies and rate limiting defenses
+- Establish the `defense` CLI command framework
+
+#### Tasks
+
+1. **Packet crafting library (`ironattack/craft.h`, `craft.c`)**
+   - Build raw Ethernet frames from scratch (dst_mac, src_mac, ethertype, payload)
+   - Build IP packets (version, TTL, protocol, src/dst, checksum)
+   - Build TCP segments (ports, seq, flags, checksum with pseudo-header)
+   - Build ARP packets (request/reply, sender/target HW+proto addr)
+   - Build ICMP packets (type, code, checksum)
+   - TAP write helper: open TAP device by name, write raw frame
+
+2. **ironattack binary skeleton (`ironattack/main.c`)**
+   - Subcommand dispatch: `ironattack <subcommand> [options]`
+   - Common options: `--target`, `--port`, `--iface`, `--rate`, `--count`
+   - Opens TAP interface (e.g., iron0) for packet injection
+   - Rate control: configurable packets/second via usleep
+
+3. **SYN flood attack (`ironattack/attack_syn_flood.c`)**
    ```bash
-   sudo ./ironattack syn-flood --target 10.0.1.1 --port 7 --rate 1000
-   sudo ./ironattack arp-spoof --target 10.0.1.1 --impersonate 10.0.1.254
-   sudo ./ironattack vlan-hop --target-vlan 20 --iface iron0
-   sudo ./ironattack ip-spoof --src 10.0.99.1 --dst 10.0.1.1 --port 7
-   sudo ./ironattack rst-inject --target 10.0.1.1 --port 7
-   sudo ./ironattack icmp-redirect --target 10.0.1.1 --new-gw 10.0.1.99
-   sudo ./ironattack slowloris --target 10.0.1.1 --port 8080 --conns 200
-   sudo ./ironattack frag-attack --target 10.0.1.1 --overlap
+   sudo ./ironattack syn-flood --target 10.0.1.1 --port 7 --rate 1000 --count 5000
    ```
+   - Send TCP SYN packets from randomized source IPs
+   - Randomize source port per packet
+   - Configurable rate (packets/second) and total count
+   - Report: packets sent, elapsed time, effective rate
 
-   Attacks implemented:
-   - **SYN flood**: send thousands of SYNs from random source IPs to exhaust connection table
-   - **ARP spoofing**: inject fake ARP replies to poison the router's ARP table
-   - **VLAN hopping**: craft double-tagged 802.1Q frames to escape VLAN isolation
-   - **IP spoofing**: forge source IP to bypass source-based ACLs
-   - **TCP RST injection**: send forged RST to tear down established connections
-   - **ICMP redirect**: send fake ICMP redirect to manipulate routing
-   - **Slowloris**: open many connections, send data slowly to exhaust resources
-   - **Fragmentation attacks**: overlapping fragments, tiny fragments
+4. **Defense module (`ironstack/security/defense.h`, `defense.c`)**
+   - Defense registry: named defenses with enable/disable state
+   - `defense_init()` — initialize all defenses as disabled
+   - `defense_enable(name)` / `defense_disable(name)`
+   - `defense_is_enabled(name)` — check if active
 
-2. **Defense mechanisms — irondefense (built into ironstack)**
+5. **SYN cookies defense**
+   - When enabled: do NOT allocate connection table entry on SYN
+   - Encode connection info into the SYN+ACK sequence number (cookie)
+   - On ACK: validate cookie, only then create connection entry
+   - Effect: connection table stays empty during flood, legitimate clients still connect
 
-   Defenses are enabled/disabled via CLI:
+6. **Rate limiting defense**
+   - Per-source IP SYN rate tracking
+   - Configurable threshold (e.g., 100 SYNs/second per source)
+   - Excess SYNs dropped with audit log event
+   - `defense rate-limit <N>/s` CLI command
+
+7. **CLI integration**
    ```
    ironctl> defense syn-cookies enable
-   ironctl> defense rate-limit 100/s per-source
-   ironctl> defense arp-inspection enable
-   ironctl> defense vlan-strict enable
+   ironctl> defense syn-cookies disable
+   ironctl> defense rate-limit 100/s
+   ironctl> defense show
    ```
 
-   Defenses implemented:
-   - **SYN cookies**: stateless SYN handling under flood (no connection table entry until ACK)
-   - **Rate limiting**: per-source connection rate caps (drop excess SYNs)
-   - **Connection tracking**: stateful inspection (already in Phase 8d)
-   - **Anomaly detection**: flag unusual patterns (invalid flags, unusual sizes)
-   - **Blackhole routing**: drop traffic to known-bad destinations
-   - **ARP inspection**: validate ARP against known IP-MAC bindings
-   - **VLAN strict mode**: reject double-tagged frames on access ports
+8. **Validation**
+   - SYN flood WITHOUT defenses: connection table fills at 256, new SYNs rejected
+   - SYN flood WITH SYN cookies: connection table stays near 0, legitimate client still connects
+   - SYN flood WITH rate limit: excess SYNs dropped, audit log shows drops
+   - ironattack reports packets sent and effective rate
+
+---
+
+### Phase 13b: ARP Spoofing + VLAN Hopping (Week 36–37)
+
+#### Goals
+- Implement ARP spoofing attack (poison router's ARP table)
+- Implement VLAN hopping attack (double-tagged 802.1Q frames)
+- Implement ARP inspection and VLAN strict mode defenses
+
+#### Tasks
+
+1. **ARP spoof attack (`ironattack/attack_arp_spoof.c`)**
+   ```bash
+   sudo ./ironattack arp-spoof --target 10.0.1.1 --impersonate 10.0.1.254 --iface iron0
+   ```
+   - Craft ARP reply: "10.0.1.254 is at [attacker's MAC]"
+   - Send repeatedly (every 1 second) to keep poisoning active
+   - Effect: router thinks gateway 10.0.1.254 is at attacker's MAC → traffic redirected
+   - Report: ARP replies sent, duration
+
+2. **VLAN hopping attack (`ironattack/attack_vlan_hop.c`)**
+   ```bash
+   sudo ./ironattack vlan-hop --target-vlan 20 --iface iron0
+   ```
+   - Craft double-tagged frame: outer tag = native VLAN, inner tag = target VLAN
+   - When outer tag is stripped by first switch, inner tag remains → frame enters target VLAN
+   - Send ICMP ping inside the double-tagged frame to verify reachability
+   - Report: frames sent, whether response received from target VLAN
+
+3. **ARP inspection defense**
+   - Maintain trusted IP-MAC binding table (static entries from config or learned at startup)
+   - On ARP reply received: check if sender IP-MAC matches trusted table
+   - If mismatch: drop ARP, log audit event (AUDIT_ARP_ANOMALY), do NOT update ARP table
+   - `defense arp-inspection enable`
+   - Config: `arp-trust 10.0.1.254 02:00:00:00:00:FE` (trusted binding)
+
+4. **VLAN strict mode defense**
+   - On access ports: reject any frame that has a VLAN tag (TPID 0x8100) at offset 12
+   - Specifically rejects double-tagged frames (which have 0x8100 as outer tag)
+   - `defense vlan-strict enable`
+   - Audit log: AUDIT_VLAN_MISMATCH when double-tagged frame dropped
+
+5. **Validation**
+   - ARP spoof WITHOUT inspection: ARP table poisoned, `show arp` shows wrong MAC
+   - ARP spoof WITH inspection: ARP table unchanged, audit log shows blocked attempts
+   - VLAN hop WITHOUT strict mode: frame reaches target VLAN
+   - VLAN hop WITH strict mode: double-tagged frame dropped at ingress
+
+---
+
+### Phase 13c: TCP RST Injection + IP Spoofing (Week 37–38)
+
+#### Goals
+- Implement TCP RST injection attack (kill established connections)
+- Implement IP spoofing attack (bypass source-based ACLs)
+- Implement RST validation and uRPF defenses
+
+#### Tasks
+
+1. **TCP RST injection attack (`ironattack/attack_rst_inject.c`)**
+   ```bash
+   sudo ./ironattack rst-inject --target 10.0.1.1 --port 7 --iface iron0
+   ```
+   - Craft TCP RST packet with guessed sequence number
+   - Source IP = spoofed client IP (e.g., 10.0.1.2)
+   - Try multiple sequence numbers in window (brute-force approach)
+   - Effect: established TCP connection torn down
+   - Report: RSTs sent, connection status after attack
+
+2. **IP spoofing attack (`ironattack/attack_ip_spoof.c`)**
+   ```bash
+   sudo ./ironattack ip-spoof --src 10.0.99.1 --dst 10.0.1.1 --port 7 --iface iron0
+   ```
+   - Craft TCP SYN with forged source IP (10.0.99.1)
+   - Purpose: bypass ACL rules that permit traffic from specific sources
+   - Send to a port that has source-based ACL (e.g., only 10.0.1.0/24 permitted)
+   - Report: packets sent, whether connection was established
+
+3. **RST validation defense**
+   - When RST received for an existing connection:
+     - Check if RST sequence number falls within the expected receive window
+     - If outside window: drop RST silently (forged)
+     - If inside window: accept RST (legitimate close)
+   - Uses conntrack to know expected sequence range
+   - `defense rst-validation enable`
+
+4. **uRPF (unicast Reverse Path Forwarding) defense**
+   - On packet ingress: check if source IP is reachable via the interface it arrived on
+   - Lookup source IP in routing table → if best route points to a different interface → drop
+   - Prevents spoofed packets from entering the network
+   - `defense urpf enable`
+   - Audit log: source IP validation failure
+
+5. **Validation**
+   - Establish connection (nc to echo server), then RST inject WITHOUT defense: connection killed
+   - Same test WITH RST validation: forged RSTs rejected, connection survives
+   - IP spoof WITHOUT uRPF: spoofed packet reaches application
+   - IP spoof WITH uRPF: spoofed packet dropped at ingress (source not reachable via iron0)
+
+---
+
+### Phase 13d: Slowloris + Fragmentation Attacks (Week 38–39)
+
+#### Goals
+- Implement Slowloris attack (exhaust connections with slow data)
+- Implement fragmentation attacks (overlapping/tiny fragments)
+- Implement connection timeout and fragment validation defenses
+
+#### Tasks
+
+1. **Slowloris attack (`ironattack/attack_slowloris.c`)**
+   ```bash
+   sudo ./ironattack slowloris --target 10.0.1.1 --port 8080 --conns 200 --iface iron0
+   ```
+   - Open many TCP connections (complete 3-way handshake)
+   - Send partial HTTP headers very slowly (1 byte every few seconds)
+   - Never complete the request → connection stays open indefinitely
+   - Effect: all connection slots consumed, legitimate clients cannot connect
+   - Report: connections opened, target connection table usage
+
+2. **Fragmentation attack (`ironattack/attack_frag.c`)**
+   ```bash
+   sudo ./ironattack frag-attack --target 10.0.1.1 --overlap --iface iron0
+   sudo ./ironattack frag-attack --target 10.0.1.1 --tiny --iface iron0
+   ```
+   - **Overlapping fragments**: send fragments where offset ranges overlap (confuses reassembly)
+   - **Tiny fragments**: send fragments smaller than minimum (68 bytes) to evade inspection
+   - **Out-of-order**: send last fragment first, then first fragment
+   - Effect: bypass ACL/IDS inspection, crash vulnerable reassembly code
+   - Report: fragments sent, whether reassembled packet was delivered
+
+3. **Connection idle timeout defense**
+   - Track last data activity per connection (already have `last_activity` in tcp_conn_t)
+   - If connection in ESTABLISHED state has no data for N seconds → send RST and close
+   - Configurable timeout: `defense conn-timeout 30`
+   - Slowloris connections get cleaned up after timeout
+   - Audit log: connection closed due to idle timeout
+
+4. **Fragment validation defense (enhanced)**
+   - Reject fragments smaller than minimum size (68 bytes) unless last fragment
+   - Reject overlapping fragments (fragment offset + length overlaps with existing fragment)
+   - Reject excessive fragment count per packet ID (max 64 fragments)
+   - `defense frag-strict enable`
+   - Audit log: AUDIT_FRAGMENT_DROP with reason (overlap/tiny/excessive)
+
+5. **Validation**
+   - Slowloris WITHOUT timeout: 200 connections fill table, legitimate client rejected
+   - Slowloris WITH conn-timeout 30: idle connections cleaned up, legitimate client connects
+   - Overlapping fragments WITHOUT frag-strict: reassembly confused or crashes
+   - Overlapping fragments WITH frag-strict: fragments dropped, audit log entry
+   - Tiny fragments WITH frag-strict: dropped at ingress
+
+---
+
+### Phase 13e: ICMP Redirect + External Scanner + Reporting (Week 39–40)
+
+#### Goals
+- Implement ICMP redirect attack (manipulate routing)
+- Implement ICMP redirect disable defense
+- Build ironprobe-ext (real SYN scan via TAP)
+- Build automated attack-defense test report
+
+#### Tasks
+
+1. **ICMP redirect attack (`ironattack/attack_icmp_redirect.c`)**
+   ```bash
+   sudo ./ironattack icmp-redirect --target 10.0.1.1 --new-gw 10.0.1.99 --iface iron0
+   ```
+   - Craft ICMP Redirect message (type=5, code=1)
+   - Tell the router: "for destination X, use gateway 10.0.1.99 instead"
+   - Effect: router adds a host route pointing to attacker-controlled gateway
+   - Report: redirects sent, whether routing table changed
+
+2. **ICMP redirect disable defense**
+   - When enabled: ignore all incoming ICMP Redirect messages
+   - Do not modify routing table based on ICMP redirects
+   - `defense icmp-redirect-disable enable`
+   - Audit log: ICMP redirect received and ignored
 
 3. **External scanner — ironprobe-ext (separate binary)**
-
-   Real network scanning (sends actual SYN packets):
    ```bash
    sudo ./ironprobe-ext --target 10.0.1.1 --ports 1-65535 --iface iron0
-   sudo ./ironprobe-ext --target 10.0.1.1 --udp --ports 53,67,123
+   sudo ./ironprobe-ext --target 10.0.1.1 --udp --ports 53,67,123 --iface iron0
+   ```
+   - Opens TAP interface, sends real TCP SYN packets
+   - Listens for SYN+ACK (open) or RST (closed) or timeout (filtered)
+   - UDP: sends probe, listens for response or ICMP unreachable
+   - Reports: open/closed/filtered per port
+   - Service fingerprinting: classify response patterns
+
+4. **Automated attack-defense test report**
+   - Script or binary that runs all attacks with defenses OFF, then with defenses ON
+   - For each attack/defense pair, records:
+     - Attack effectiveness without defense (baseline)
+     - Attack effectiveness with defense (mitigated)
+     - Pass/fail: defense reduces attack effectiveness below threshold
+   - Output: formatted report (text or JSON)
+   ```
+   === IronNet Attack-Defense Report ===
+   Attack              | No Defense      | With Defense    | Result
+   --------------------|-----------------|-----------------|-------
+   SYN Flood           | Table full 256  | Table usage: 0  | PASS
+   ARP Spoof           | Table poisoned  | Blocked (3/3)   | PASS
+   VLAN Hop            | Frame delivered  | Dropped         | PASS
+   IP Spoof            | Packet accepted | Dropped (uRPF)  | PASS
+   RST Inject          | Conn killed     | RST rejected    | PASS
+   ICMP Redirect       | Route changed   | Ignored         | PASS
+   Slowloris           | Table full      | Timeout cleanup | PASS
+   Frag Overlap        | Reassembled     | Dropped         | PASS
    ```
 
-4. **Penetration testing workflow**
-   - **Reconnaissance**: `ironprobe-ext` scans to discover services and ACL gaps
-   - **Enumeration**: identify open ports, protocol versions, service fingerprints
-   - **Exploitation**: `ironattack` tests specific vulnerabilities
-   - **Post-exploitation**: verify what access was gained, lateral movement
-   - **Reporting**: automated test results with pass/fail per defense
+5. **Validation**
+   - ICMP redirect WITHOUT defense: `show routes` shows new host route
+   - ICMP redirect WITH defense: routing table unchanged
+   - ironprobe-ext detects all 5 open ports (7, 53, 6379, 8080, 9000)
+   - ironprobe-ext detects port 22 as filtered (ACL deny)
+   - Full report generated with all 8 attack/defense pairs passing
 
-5. **Attack-defense matrix**
+---
 
-   | Attack | Defense | Metric |
-   |--------|---------|--------|
-   | SYN flood | SYN cookies + rate limit | Connection table usage under attack |
-   | ARP spoofing | ARP inspection | Poisoned entries detected/blocked |
-   | VLAN hopping | VLAN strict mode | Double-tagged frames dropped |
-   | IP spoofing | Source IP validation (uRPF) | Spoofed packets dropped |
-   | TCP RST injection | Connection tracking | Forged RSTs rejected |
-   | ICMP redirect | ICMP redirect disable | Routing table unchanged |
-   | Slowloris | Connection timeout + rate limit | Resources recovered |
-   | Fragmentation | Fragment validation | Overlapping/tiny frags dropped |
+### Phase 13 Sub-phase Summary
 
-6. **Validation**
-   - SYN flood with/without SYN cookies: measure connection table behavior
-   - VLAN hopping attempt with/without strict trunk mode
-   - ARP spoofing with/without ARP inspection
-   - TCP RST injection with/without connection tracking
-   - Full penetration test report generated automatically
-   - Each attack/defense pair tested independently
-
-### Summarization
-
-1. Key difference table — Phase 12 (internal, generic) vs Phase 13 (external, specific attacks, real packets)
-2. Architecture diagram — 3 terminals: router, attacker, monitor
-3. External attack tools (ironattack separate binary) with 8 subcommands:
-   * syn-flood, arp-spoof, vlan-hop, ip-spoof, rst-inject, icmp-redirect, slowloris, frag-attack
-4. Defense mechanisms (irondefense built into ironstack) with CLI commands:
-   * defense syn-cookies enable, defense rate-limit 100/s, defense arp-inspection enable, etc.
-5. External scanner (ironprobe-ext separate binary) — real SYN packets via TAP
-6. Attack-defense matrix — maps each attack to its defense with measurable metrics
-7. Penetration testing workflow — reconnaissance → enumeration → exploitation → post-exploitation → reporting
+| Sub-phase | Component | Week | New Binaries | Attacks | Defenses |
+|-----------|-----------|------|--------------|---------|----------|
+| 13a | Infrastructure + SYN Flood | Week 35–36 | `ironattack` (skeleton + syn-flood) | SYN flood | SYN cookies, rate limit |
+| 13b | ARP Spoofing + VLAN Hopping | Week 36–37 | — (adds subcommands) | ARP spoof, VLAN hop | ARP inspection, VLAN strict |
+| 13c | TCP RST Injection + IP Spoofing | Week 37–38 | — | RST inject, IP spoof | RST validation, uRPF |
+| 13d | Slowloris + Fragmentation | Week 38–39 | — | Slowloris, frag attack | Conn timeout, frag strict |
+| 13e | ICMP Redirect + Scanner + Report | Week 39–40 | `ironprobe-ext` | ICMP redirect | Redirect disable, full report |
 
 ---
 
