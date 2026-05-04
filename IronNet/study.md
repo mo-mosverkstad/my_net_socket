@@ -268,7 +268,116 @@ This document provides a concrete, step-by-step implementation plan for the Iron
 
 ---
 
-## Phase 7: Control Plane — ironctl (Week 17–18)
+## Phase 7: Virtual Router (Week 17–18)
+
+### Goals
+- Wire all data plane modules into a working router with real TAP interfaces
+- Implement ARP for MAC address resolution
+- Implement IP fragmentation and reassembly
+- Implement interface-to-IP binding (not just a global IP list)
+- Create a startup configuration file parser
+- Route packets between interfaces end-to-end on WSL
+
+### Tasks
+
+1. **Interface configuration model**
+   - Bind IP address + prefix to a specific interface
+   - Each interface has: name, MAC, IP/prefix, link state (up/down)
+   - Replace global ip_add_local_addr() with per-interface IP binding
+
+2. **ARP (Address Resolution Protocol)**
+   - ARP request/reply handling (who-has / is-at)
+   - ARP table: IP → MAC mapping with timeout
+   - Proxy ARP (optional)
+   - ARP used to resolve next-hop MAC before L2 TX (replaces broadcast MAC hack)
+
+3. **IP fragmentation and reassembly**
+   - Fragment outbound packets exceeding interface MTU
+   - Reassemble inbound fragments before L4 delivery
+   - Fragment timeout (drop incomplete reassembly after N seconds)
+   - Security: reject overlapping fragments, enforce minimum fragment size
+
+4. **Startup config file parser (router.conf)**
+   - Parse interface definitions, routes, ACLs, PBR rules at startup
+   - Simple line-based format
+
+5. **End-to-end packet flow with real TAP devices**
+   - Create TAP interfaces at startup (requires sudo)
+   - Pipeline reads from all interfaces, forwards between them
+   - Packets arriving on iron0 destined for 10.0.2.x are forwarded out iron1
+
+6. **IPsec integration into forwarding path**
+   - Call ipsec_outbound() before L2 TX on forward
+   - Call ipsec_inbound() on local delivery
+
+7. **Validation**
+   - ARP resolution: send packet, verify ARP request sent, inject ARP reply, verify forwarding
+   - Fragmentation: send oversized packet, verify fragments on output
+   - Reassembly: inject fragments, verify reassembled packet delivered to L4
+   - Start router with config file, ping between two TAP interfaces from WSL
+   - Verify ACL blocks SSH (port 22) but permits HTTP (port 80)
+   - Module test: end-to-end packet routing through the virtual router
+
+---
+
+## Phase 8: VLAN, Bridge, NAT & Connection Tracking (Week 19–21)
+
+### Goals
+- Implement 802.1Q VLAN tagging and trunk/access port modes
+- Build a software bridge for L2 forwarding within a VLAN
+- Support multiple routing tables (VRF-lite) selectable by PBR
+- Implement NAT (Network Address Translation)
+- Implement connection tracking (conntrack) for stateful filtering
+
+### Tasks
+
+1. **VLAN (802.1Q)**
+   - Parse and insert 4-byte VLAN tag in Ethernet frames
+   - Access ports (untagged, single VLAN) and trunk ports (tagged, multiple VLANs)
+   - Per-VLAN interface membership
+   - VLAN-aware ACL filtering
+
+2. **Bridge (L2 forwarding)**
+   - MAC address learning table (src MAC -> port mapping)
+   - Unknown unicast flooding within VLAN
+   - Bridge loop detection (simplified STP or TTL-based)
+   - Per-bridge statistics
+
+3. **Multiple routing tables**
+   - Named routing tables (e.g., table "main", table "mgmt")
+   - PBR can select which routing table to use
+   - Each table has independent FIB with longest-prefix match
+   - Default table used when no PBR match
+
+4. **NAT (Network Address Translation)**
+   - SNAT (Source NAT): rewrite source IP/port for outbound traffic
+   - DNAT (Destination NAT): rewrite destination IP/port for inbound traffic
+   - NAT table: track translated connections for return traffic
+   - Port allocation pool for masquerade mode
+   - NAT applied after routing decision (SNAT) or before routing (DNAT)
+
+5. **Connection tracking (conntrack)**
+   - Track all connections (TCP, UDP, ICMP) with state
+   - States: NEW, ESTABLISHED, RELATED, INVALID
+   - Enable stateful ACL: "permit established" rule
+   - Required for NAT return-path translation
+   - Timeout per protocol (TCP: 300s, UDP: 30s, ICMP: 10s)
+
+6. **Inter-VLAN routing**
+   - Router-on-a-stick: route between VLANs via L3
+   - ACL applied per-VLAN on inter-VLAN traffic
+
+7. **Validation**
+   - VLAN isolation: traffic in VLAN 10 cannot reach VLAN 20 at L2
+   - Bridge: MAC learning and forwarding within same VLAN
+   - Multiple routing tables: PBR selects alternate table
+   - NAT: internal host reaches external via SNAT, return traffic translated back
+   - Conntrack: stateful ACL permits return traffic for established connections
+   - Module test: VLAN tagging/untagging visible in hex dump
+
+---
+
+## Phase 9: Control Plane — ironctl (Week 21–22)
 
 ### Goals
 - CLI for real-time configuration
@@ -299,11 +408,12 @@ This document provides a concrete, step-by-step implementation plan for the Iron
 
 ---
 
-## Phase 8: Telemetry — ironmon (Week 19–20)
+## Phase 10: Telemetry & Audit Logging — ironmon (Week 23–24)
 
 ### Goals
 - Real-time metrics export
 - Per-layer counters, drop reasons, state table utilization
+- Security audit trail for penetration testing analysis
 
 ### Tasks
 
@@ -321,16 +431,26 @@ This document provides a concrete, step-by-step implementation plan for the Iron
    ```
    DROP_ACL, DROP_NO_ROUTE, DROP_PBR_LOOP,
    DROP_TCP_INVALID_STATE, DROP_RESOURCE_LIMIT,
-   DROP_IPSEC_NO_SA, DROP_TTL_EXPIRED
+   DROP_IPSEC_NO_SA, DROP_TTL_EXPIRED,
+   DROP_NAT_NO_POOL, DROP_CONNTRACK_INVALID,
+   DROP_FRAGMENT_OVERLAP, DROP_ARP_INSPECTION
    ```
 
-3. **Export interface**
-   - CLI: `show stats`
+3. **Security audit log**
+   - Log all security-relevant events with timestamp, src/dst, action, reason
+   - Events: ACL deny, IPsec drop, invalid flags, connection table full, ARP anomaly
+   - Structured format (parseable for automated analysis)
+   - Configurable verbosity (summary vs detailed)
+   - Supports post-incident forensic analysis
+
+4. **Export interface**
+   - CLI: `show stats`, `show audit-log`
    - Structured output (JSON or plain text) for scripting
+   - File export for offline analysis
 
 ---
 
-## Phase 9: Target Applications — ironapps (Week 21–22)
+## Phase 11: Target Applications — ironapps (Week 25–26)
 
 ### Goals
 - Build simple applications as attack targets
@@ -342,12 +462,20 @@ This document provides a concrete, step-by-step implementation plan for the Iron
 2. **Key-Value TCP server** — stateful, memory-consuming
 3. **Custom binary RPC** — complex parsing (ideal fuzz target)
 4. **Simple HTTP-like service** — text protocol parsing
+5. **DNS server (simplified)** — UDP-based name resolution
+   - Responds to A record queries from a static zone file
+   - Attack surface: DNS amplification, spoofing, cache poisoning study
+   - Common penetration testing entry point
 
 All apps register with ironstack via a socket-like API and run on top of the custom TCP/UDP.
 
+### Scope note
+
+Dynamic routing protocols (OSPF, BGP) are **out of scope** for IronNet. The project uses static routing only. Dynamic routing may be added as a future extension if needed.
+
 ---
 
-## Phase 10: Security Testing — ironfuzz, ironprobe, ironload (Week 23–28)
+## Phase 12: Security Testing — ironfuzz, ironprobe, ironload (Week 27–32)
 
 ### Goals
 - Network scanner for attack surface validation
@@ -386,7 +514,56 @@ All apps register with ironstack via a socket-like API and run on top of the cus
 
 ---
 
-## Phase 11: Network Emulator — ironsim (Week 29–30)
+## Phase 13: Attack Simulation & Defense (Week 33–36)
+
+### Goals
+- Simulate specific network attack techniques against the protocol stack
+- Implement defense mechanisms and study their effectiveness
+- Provide a structured penetration testing workflow
+
+### Tasks
+
+1. **Attack simulation tools (ironattack)**
+   - SYN flood: overwhelm TCP connection table
+   - ARP spoofing: inject fake ARP replies to poison MAC tables
+   - VLAN hopping: craft double-tagged frames to escape VLAN isolation
+   - IP spoofing: forge source IP to bypass ACLs
+   - TCP RST injection: disrupt established connections
+   - ICMP redirect: manipulate routing via crafted ICMP messages
+   - Slowloris-style: hold connections open to exhaust resources
+   - Fragmentation attacks: overlapping fragments, tiny fragments
+
+2. **Defense mechanisms (irondefense)**
+   - SYN cookies: stateless SYN handling under flood
+   - Rate limiting: per-source connection rate caps
+   - Connection tracking: stateful inspection for return traffic
+   - Anomaly detection: flag unusual packet patterns (invalid flags, unusual sizes)
+   - Blackhole routing: drop traffic to known-bad destinations
+   - ARP inspection: validate ARP against known IP-MAC bindings
+   - VLAN access control: strict trunk/access enforcement
+
+3. **Penetration testing workflow**
+   - Reconnaissance: ironprobe scans to discover services and ACL gaps
+   - Enumeration: identify open ports, protocol versions, OS fingerprints
+   - Exploitation: use ironattack to test specific vulnerabilities
+   - Post-exploitation: verify what access was gained, lateral movement
+   - Reporting: automated test results with pass/fail per defense
+
+4. **Attack-defense matrix**
+   - Map each attack to its corresponding defense
+   - Measure: does the defense detect? mitigate? log?
+   - Study: what happens when defense is misconfigured?
+
+5. **Validation**
+   - SYN flood with/without SYN cookies: measure connection table behavior
+   - VLAN hopping attempt with/without strict trunk mode
+   - ARP spoofing with/without ARP inspection
+   - TCP RST injection with/without connection tracking
+   - Full penetration test report generated automatically
+
+---
+
+## Phase 14: Network Emulator — ironsim (Week 37–38)
 
 ### Goals
 - Run multiple ironstack instances as network nodes
@@ -401,7 +578,7 @@ All apps register with ironstack via a socket-like API and run on top of the cus
 
 ---
 
-## Phase 12: Packet Tools — irontrace (Week 31–32)
+## Phase 15: Packet Tools — irontrace (Week 39–40)
 
 ### Goals
 - Capture packets at any pipeline stage
@@ -497,14 +674,17 @@ All apps register with ironstack via a socket-like API and run on top of the cus
 | 4 | ACL & PBR | Week 8–9 |
 | 5 | UDP & TCP | Week 10–14 |
 | 6 | IPsec (simulated) | Week 15–16 |
-| 7 | ironctl (CLI) | Week 17–18 |
-| 8 | ironmon (telemetry) | Week 19–20 |
-| 9 | ironapps (targets) | Week 21–22 |
-| 10 | ironfuzz / ironprobe / ironload | Week 23–28 |
-| 11 | ironsim (emulator) | Week 29–30 |
-| 12 | irontrace (capture/replay) | Week 31–32 |
+| 7 | Virtual Router (end-to-end) | Week 17–18 |
+| 8 | VLAN, Bridge, NAT & Connection Tracking | Week 19–21 |
+| 9 | ironctl (CLI) | Week 21–22 |
+| 10 | ironmon (telemetry) | Week 23–24 |
+| 11 | ironapps (targets) | Week 25–26 |
+| 12 | ironfuzz / ironprobe / ironload | Week 27–32 |
+| 13 | Attack Simulation & Defense | Week 33–36 |
+| 14 | ironsim (emulator) | Week 37–38 |
+| 15 | irontrace (capture/replay) | Week 39–40 |
 
-**Total estimated duration: ~8 months (part-time development)**
+**Total estimated duration: ~10 months (part-time development)**
 
 ---
 
@@ -515,7 +695,10 @@ All apps register with ironstack via a socket-like API and run on top of the cus
 3. ~~Implement `common/` utilities and IRON_ASSERT framework~~ ✅
 4. ~~Phase 2: TUN/TAP integration and L2 parsing~~ ✅
 5. ~~Phase 3: L3 IP layer, routing table, ICMP~~ ✅
-6. Begin Phase 4: ACL & PBR engines
+6. ~~Phase 4: ACL & PBR engines~~ ✅
+7. ~~Phase 5: L4 UDP & TCP~~ ✅
+8. ~~Phase 6: IPsec (simulated)~~ ✅
+9. Begin Phase 7: Virtual Router (end-to-end integration)
 
 ---
 
@@ -675,31 +858,31 @@ All apps register with ironstack via a socket-like API and run on top of the cus
 +---------------------+------------------------------------+-------------------+
 |                                                                              |
 |  +----------+    +----------+    +-------+    +-------+    +----------+      |
-|  |  L2 RX   |--->| IP Valid |--->|  ACL  |--->|  PBR  |--->| FIB      |      |
+|  |  L2 RX   |--->| IP Valid |--->|  PBR  |--->|  ACL  |--->| FIB      |      |
 |  |  Parse   |    | Checksum |    | Check |    | Check |    | Lookup   |      |
-|  |  Dispatch|    | TTL      |    |       |    |       |    |          |      |
+|  |  Dispatch|    | TTL      |    | (high)|    |(output|    | (fallback|      |
 |  +----------+    +-----+----+    +---+---+    +---+---+    +----+-----+      |
 |                        |             |             |             |            |
 |                        v             v             v             v            |
 |                   +----+----+   +----+----+   +----+----+   +---+-----+      |
 |                   |  DROP   |   |  DROP   |   |  DROP   |   | FORWARD |      |
-|                   | Invalid |   | ACL Deny|   | PBR Loop|   | or LOCAL|      |
+|                   | Invalid |   | PBR Loop|   | ACL Deny|   | or LOCAL|      |
 |                   +---------+   +---------+   +---------+   +----+----+      |
 |                                                                  |           |
 |                                                                  v           |
 |                                                         +--------+--------+  |
-|                                                         | IPsec Policy    |  |
-|                                                         | (encrypt/pass)  |  |
+|                                                         | Conntrack +     |  |
+|                                                         | NAT + IPsec    |  |
 |                                                         +--------+--------+  |
 |                                                                  |           |
 |                                                    +-------------+------+    |
 |                                                    |                    |    |
 |                                                    v                    v    |
 |                                             +------+-----+     +-------+-+  |
-|                                             | Local      |     | L2 TX   |  |
-|                                             | Deliver    |     | Forward |  |
-|                                             | (L4 Demux) |     +---------+  |
-|                                             +------+-----+                   |
+|                                             | Local      |     | ARP     |  |
+|                                             | Deliver    |     | Resolve |  |
+|                                             | (L4 Demux) |     | + L2 TX |  |
+|                                             +------+-----+     +---------+  |
 |                                                    |                         |
 |                                          +---------+---------+               |
 |                                          |                   |               |
@@ -715,6 +898,9 @@ All apps register with ironstack via a socket-like API and run on top of the cus
 |                                    +-------------------------------+         |
 |                                                                              |
 +------------------------------[ ironstack ]-----------------------------------+
+
+Pipeline order (vendor-standard):
+  PBR (highest priority) → ACL (output filter) → FIB (fallback routing)
 
 Legend:
   ---> = Packet flow (success path)
