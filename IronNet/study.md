@@ -322,58 +322,173 @@ This document provides a concrete, step-by-step implementation plan for the Iron
 
 ## Phase 8: VLAN, Bridge, NAT & Connection Tracking (Week 19–21)
 
-### Goals
+This phase is split into 5 sub-phases due to its scope.
+
+### Phase 8a: VLAN (802.1Q) (Week 19)
+
+#### Goals
 - Implement 802.1Q VLAN tagging and trunk/access port modes
+
+#### Tasks
+
+1. **VLAN tag parsing and insertion**
+   - Parse 4-byte VLAN tag (TPID 0x8100 + TCI) in Ethernet frames
+   - Insert tag on egress (access port → trunk port)
+   - Strip tag on ingress (trunk port → access port)
+
+2. **Port modes**
+   - Access port: untagged, belongs to single VLAN
+   - Trunk port: tagged, carries multiple VLANs
+   - Per-port VLAN membership configuration
+
+3. **VLAN-aware dispatch**
+   - L2 dispatch considers VLAN ID
+   - Frames only forwarded within same VLAN
+
+4. **Validation**
+   - Module test: VLAN tag visible in hex dump (insert/strip)
+   - Access port drops tagged frames from wrong VLAN
+   - Trunk port carries multiple VLANs
+
+---
+
+### Phase 8b: Bridge (L2 Forwarding) (Week 19–20)
+
+#### Goals
 - Build a software bridge for L2 forwarding within a VLAN
-- Support multiple routing tables (VRF-lite) selectable by PBR
-- Implement NAT (Network Address Translation)
-- Implement connection tracking (conntrack) for stateful filtering
 
-### Tasks
+#### Tasks
 
-1. **VLAN (802.1Q)**
-   - Parse and insert 4-byte VLAN tag in Ethernet frames
-   - Access ports (untagged, single VLAN) and trunk ports (tagged, multiple VLANs)
-   - Per-VLAN interface membership
-   - VLAN-aware ACL filtering
+1. **MAC address learning table**
+   - Learn: src MAC → ingress port mapping
+   - Aging: entries expire after timeout (300s)
+   - Max entries limit
 
-2. **Bridge (L2 forwarding)**
-   - MAC address learning table (src MAC -> port mapping)
-   - Unknown unicast flooding within VLAN
-   - Bridge loop detection (simplified STP or TTL-based)
-   - Per-bridge statistics
+2. **Forwarding decisions**
+   - Known unicast: forward to learned port
+   - Unknown unicast: flood to all ports in same VLAN
+   - Broadcast: flood to all ports in same VLAN
 
-3. **Multiple routing tables**
-   - Named routing tables (e.g., table "main", table "mgmt")
-   - PBR can select which routing table to use
+3. **Loop detection**
+   - Simplified STP or TTL-based loop prevention
+   - Per-bridge statistics (learned, flooded, dropped)
+
+4. **Validation**
+   - Module test: MAC learning and unicast forwarding
+   - Unknown destination → flood
+   - VLAN isolation: bridge does not forward across VLANs
+
+---
+
+### Phase 8c: Multiple Routing Tables (Week 20)
+
+#### Goals
+- Support multiple independent FIBs (VRF-lite)
+- PBR can select which routing table to use
+
+#### Tasks
+
+1. **Named routing tables**
+   - Table registry: "main", "mgmt", custom names
    - Each table has independent FIB with longest-prefix match
-   - Default table used when no PBR match
+   - Default table ("main") used when no PBR match
 
-4. **NAT (Network Address Translation)**
-   - SNAT (Source NAT): rewrite source IP/port for outbound traffic
-   - DNAT (Destination NAT): rewrite destination IP/port for inbound traffic
-   - NAT table: track translated connections for return traffic
-   - Port allocation pool for masquerade mode
-   - NAT applied after routing decision (SNAT) or before routing (DNAT)
+2. **PBR integration**
+   - PBR action extended: `next_hop` + `out_iface` + `table_id`
+   - PBR can redirect to a different routing table instead of (or in addition to) a next-hop
 
-5. **Connection tracking (conntrack)**
-   - Track all connections (TCP, UDP, ICMP) with state
+3. **Config file support**
+   ```
+   table mgmt
+   route 192.168.0.0/16 via 10.0.1.254 table mgmt
+   pbr match src 10.0.99.0/24 table mgmt
+   ```
+
+4. **Validation**
+   - Module test: same destination, different source → different routing table → different next-hop
+   - Default table fallback when no PBR match
+
+---
+
+### Phase 8d: Connection Tracking (Week 20–21)
+
+#### Goals
+- Track all connections with state for stateful filtering
+- Enable "permit established" ACL rules
+
+#### Tasks
+
+1. **Connection tracking table (conntrack)**
+   - Track by 5-tuple: src_ip, dst_ip, protocol, src_port, dst_port
    - States: NEW, ESTABLISHED, RELATED, INVALID
-   - Enable stateful ACL: "permit established" rule
-   - Required for NAT return-path translation
-   - Timeout per protocol (TCP: 300s, UDP: 30s, ICMP: 10s)
+   - Bidirectional: original + reply direction
 
-6. **Inter-VLAN routing**
-   - Router-on-a-stick: route between VLANs via L3
-   - ACL applied per-VLAN on inter-VLAN traffic
+2. **State transitions**
+   - TCP: SYN=NEW, SYN+ACK=ESTABLISHED, FIN=closing
+   - UDP: first packet=NEW, reply=ESTABLISHED
+   - ICMP: request=NEW, reply=RELATED
 
-7. **Validation**
-   - VLAN isolation: traffic in VLAN 10 cannot reach VLAN 20 at L2
-   - Bridge: MAC learning and forwarding within same VLAN
-   - Multiple routing tables: PBR selects alternate table
-   - NAT: internal host reaches external via SNAT, return traffic translated back
-   - Conntrack: stateful ACL permits return traffic for established connections
-   - Module test: VLAN tagging/untagging visible in hex dump
+3. **Timeouts per protocol**
+   - TCP established: 300s
+   - TCP other: 60s
+   - UDP: 30s
+   - ICMP: 10s
+
+4. **Stateful ACL integration**
+   - New ACL match: `state established` or `state new`
+   - "permit established" allows return traffic without explicit rule
+
+5. **Validation**
+   - Module test: outbound SYN creates NEW entry, reply makes it ESTABLISHED
+   - Stateful ACL permits return traffic
+   - Timeout expiry removes entries
+
+---
+
+### Phase 8e: NAT (Network Address Translation) (Week 21)
+
+#### Goals
+- Implement SNAT and DNAT
+- Use connection tracking for return-path translation
+
+#### Tasks
+
+1. **SNAT (Source NAT / Masquerade)**
+   - Rewrite source IP + port for outbound traffic
+   - Port allocation pool (e.g., 10000–65000)
+   - Applied after routing decision (post-routing)
+
+2. **DNAT (Destination NAT / Port forwarding)**
+   - Rewrite destination IP + port for inbound traffic
+   - Applied before routing decision (pre-routing)
+
+3. **NAT table**
+   - Maps original 5-tuple → translated 5-tuple
+   - Linked to conntrack entries
+   - Return traffic automatically reverse-translated
+
+4. **Config file support**
+   ```
+   nat snat src 10.0.1.0/24 to 203.0.113.1 pool 10000-65000
+   nat dnat dst 203.0.113.1 port 80 to 10.0.1.100 port 8080
+   ```
+
+5. **Validation**
+   - Module test: outbound packet gets SNAT applied, reply gets reverse-translated
+   - DNAT: external traffic to public IP reaches internal server
+   - Port allocation does not collide
+
+---
+
+### Phase 8 Sub-phase Summary
+
+| Sub-phase | Component | Week | Dependencies |
+|-----------|-----------|------|--------------|
+| 8a | VLAN (802.1Q) | Week 19 | Tag parse/insert, access/trunk ports |
+| 8b | Bridge (L2 forwarding) | Week 19–20 | MAC learning, flooding, loop detection (needs 8a) |
+| 8c | Multiple Routing Tables | Week 20 | Named FIBs, PBR table selection (independent) |
+| 8d | Connection Tracking | Week 20–21 | Conntrack states, stateful ACL (needed by 8e) |
+| 8e | NAT | Week 21 | SNAT/DNAT, port pool, return-path (needs 8d) |
 
 ---
 
