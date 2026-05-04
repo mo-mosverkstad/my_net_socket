@@ -4,6 +4,8 @@
 #include "stats.h"
 #include "utils.h"
 #include "../l3/ip.h"
+#include "../security/defense.h"
+#include "../ironmon/audit.h"
 
 #include <string.h>
 
@@ -14,6 +16,16 @@ int eth_parse(const uint8_t *raw, int len, int iface_idx, eth_frame_t *frame) {
         LOG_DBG(MODULE, "Frame too short: %d bytes", len);
         iron_stats_increment(STAT_L2_RX_DROPS);
         return -1;
+    }
+
+    /* VLAN strict mode: reject tagged frames (double-tag / VLAN hop defense) */
+    if (defense_is_enabled("vlan-strict")) {
+        if (len >= 14 && raw[12] == 0x81 && raw[13] == 0x00) {
+            LOG_WRN(MODULE, "VLAN strict: tagged frame dropped (TPID 0x8100)");
+            audit_log_event(AUDIT_VLAN_MISMATCH, 0, 0, 0, 0, 0, "tagged frame on access port");
+            iron_stats_increment(STAT_L2_RX_DROPS);
+            return -1;
+        }
     }
 
     frame->header = (eth_header_t *)raw;

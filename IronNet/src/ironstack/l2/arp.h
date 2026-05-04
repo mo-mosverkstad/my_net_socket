@@ -35,6 +35,7 @@ int arp_init(void);
 int arp_input(uint8_t *data, int len, int iface_idx);
 int arp_resolve(uint32_t ip, int iface_idx, uint8_t *mac_out);
 void arp_add_entry(uint32_t ip, const uint8_t *mac);
+void arp_trust_add(uint32_t ip, const uint8_t *mac);
 void arp_timer_tick(void);
 void arp_dump(void);
 

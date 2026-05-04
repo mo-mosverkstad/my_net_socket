@@ -75,6 +75,65 @@ int craft_tcp_syn(uint8_t *buf, int buf_len,
     return total;
 }
 
+int craft_arp_reply(uint8_t *buf, int buf_len,
+                    const uint8_t *src_mac, const uint8_t *dst_mac,
+                    uint32_t sender_ip, const uint8_t *sender_mac,
+                    uint32_t target_ip, const uint8_t *target_mac) {
+    int total = ETH_HLEN + ARP_PKTLEN;
+    if (buf_len < total) return -1;
+    memset(buf, 0, total);
+
+    memcpy(buf, dst_mac, 6);
+    memcpy(buf + 6, src_mac, 6);
+    buf[12] = 0x08; buf[13] = 0x06;
+
+    uint8_t *arp = buf + ETH_HLEN;
+    arp[0] = 0x00; arp[1] = 0x01;
+    arp[2] = 0x08; arp[3] = 0x00;
+    arp[4] = 6; arp[5] = 4;
+    arp[6] = 0x00; arp[7] = 0x02;
+    memcpy(arp + 8, sender_mac, 6);
+    memcpy(arp + 14, &sender_ip, 4);
+    memcpy(arp + 18, target_mac, 6);
+    memcpy(arp + 24, &target_ip, 4);
+
+    return total;
+}
+
+int craft_double_tagged(uint8_t *buf, int buf_len,
+                        const uint8_t *src_mac, const uint8_t *dst_mac,
+                        uint16_t outer_vlan, uint16_t inner_vlan,
+                        uint32_t src_ip, uint32_t dst_ip) {
+    int total = 14 + 4 + 4 + 20 + 8; /* eth + 2 tags + ip + icmp */
+    if (buf_len < total) return -1;
+    memset(buf, 0, total);
+
+    memcpy(buf, dst_mac, 6);
+    memcpy(buf + 6, src_mac, 6);
+    buf[12] = 0x81; buf[13] = 0x00;
+    buf[14] = (outer_vlan >> 8) & 0x0F; buf[15] = outer_vlan & 0xFF;
+    buf[16] = 0x81; buf[17] = 0x00;
+    buf[18] = (inner_vlan >> 8) & 0x0F; buf[19] = inner_vlan & 0xFF;
+    buf[20] = 0x08; buf[21] = 0x00;
+
+    uint8_t *ip = buf + 22;
+    ip[0] = 0x45;
+    uint16_t ip_total = 28;
+    ip[2] = (ip_total >> 8) & 0xFF; ip[3] = ip_total & 0xFF;
+    ip[8] = 64; ip[9] = 1;
+    memcpy(ip + 12, &src_ip, 4);
+    memcpy(ip + 16, &dst_ip, 4);
+    uint16_t ck = ip_checksum(ip, 20);
+    ip[10] = (ck >> 8) & 0xFF; ip[11] = ck & 0xFF;
+
+    uint8_t *icmp = ip + 20;
+    icmp[0] = 8; icmp[4] = 0x00; icmp[5] = 0x01; icmp[6] = 0x00; icmp[7] = 0x01;
+    uint16_t icmp_ck = ip_checksum(icmp, 8);
+    icmp[2] = (icmp_ck >> 8) & 0xFF; icmp[3] = icmp_ck & 0xFF;
+
+    return total;
+}
+
 int tap_open(const char *name) {
     /* Use AF_PACKET raw socket to send frames on existing interface */
     int fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));

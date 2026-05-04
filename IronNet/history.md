@@ -2974,3 +2974,66 @@ After Phase 13a:
 - Defense module tested interactively via CLI
 - ironattack binary built and functional (requires TAP for real use)
 - SYN cookies proven effective: connection table stays empty under flood
+
+---
+
+## Phase 13b: ARP Spoofing + VLAN Hopping Attack/Defense
+
+### What was done
+
+We implemented two attacks and their corresponding defenses:
+1. **ARP spoof attack** — inject fake ARP replies to poison the router's ARP table
+2. **VLAN hopping attack** — craft double-tagged 802.1Q frames to escape VLAN isolation
+3. **ARP inspection defense** — validate ARP against trusted IP-MAC bindings before learning
+4. **VLAN strict mode defense** — reject any tagged frame (TPID 0x8100) at ingress
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| (none — all changes in existing files) | |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironattack/craft.h` | Added `craft_arp_reply()` and `craft_double_tagged()` declarations |
+| `ironattack/craft.c` | Implemented ARP reply and double-tagged frame construction |
+| `ironattack/main.c` | Added `arp-spoof` and `vlan-hop` subcommands with CLI options |
+| `ironstack/l2/arp.h` | Added `arp_trust_add()` declaration |
+| `ironstack/l2/arp.c` | Added ARP inspection: trusted bindings table, validation before learning |
+| `ironstack/l2/eth.c` | Added VLAN strict mode: reject frames with TPID 0x8100 when enabled |
+| `tests/CMakeLists.txt` | Added defense_stub/audit_stub to test_eth, test_arp, test_l2_module |
+
+### How ARP inspection works
+
+1. Administrator adds trusted bindings: `arp_trust_add(gateway_ip, gateway_mac)`
+2. When ARP reply arrives, before learning the sender's MAC:
+   - Check if sender IP has a trusted binding
+   - If yes: compare MAC — if mismatch, DROP and log audit event
+   - If no binding exists for that IP: allow (no restriction)
+3. Effect: attacker's fake ARP reply claiming "gateway is at attacker_mac" is blocked
+
+### How VLAN strict mode works
+
+1. When enabled, `eth_parse()` checks byte 12-13 of every incoming frame
+2. If TPID = 0x8100 (VLAN tag present): DROP the frame immediately
+3. This blocks double-tagged frames (VLAN hopping) at the earliest point
+4. Audit event logged: AUDIT_VLAN_MISMATCH
+
+### ironattack new commands
+
+```bash
+# ARP spoofing: claim gateway IP belongs to attacker MAC
+sudo ./ironattack arp-spoof --target 10.0.1.1 --impersonate 10.0.1.254 --count 10
+
+# VLAN hopping: double-tagged frame to escape VLAN isolation
+sudo ./ironattack vlan-hop --target 10.0.1.1 --target-vlan 20 --outer-vlan 1 --count 10
+```
+
+### Current test summary
+
+After Phase 13b:
+- **14 unit tests + 10 module tests = 24 tests, all passing**
+- ironattack binary has 3 subcommands: syn-flood, arp-spoof, vlan-hop
+- ARP inspection and VLAN strict defenses integrated into data plane

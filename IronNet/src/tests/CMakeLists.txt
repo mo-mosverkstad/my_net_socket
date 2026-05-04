@@ -2,10 +2,11 @@
 add_executable(test_stats unit/test_stats.c)
 target_link_libraries(test_stats iron_common)
 
-add_executable(test_eth unit/test_eth.c)
+add_executable(test_eth unit/test_eth.c stubs/defense_stub.c stubs/audit_stub.c)
 target_include_directories(test_eth PRIVATE
     ${CMAKE_SOURCE_DIR}/common
     ${CMAKE_SOURCE_DIR}/ironstack
+    ${CMAKE_SOURCE_DIR}
 )
 target_link_libraries(test_eth iron_common)
 
@@ -46,10 +47,11 @@ target_include_directories(test_vlan PRIVATE
 )
 target_link_libraries(test_vlan iron_common)
 
-add_executable(test_arp unit/test_arp.c)
+add_executable(test_arp unit/test_arp.c stubs/defense_stub.c stubs/audit_stub.c)
 target_include_directories(test_arp PRIVATE
     ${CMAKE_SOURCE_DIR}/common
     ${CMAKE_SOURCE_DIR}/ironstack
+    ${CMAKE_SOURCE_DIR}
 )
 target_link_libraries(test_arp iron_common)
 
@@ -96,11 +98,12 @@ target_include_directories(test_nat PRIVATE
 target_link_libraries(test_nat iron_common)
 
 # Module tests
-add_executable(test_l2_module module/test_l2_module.c)
+add_executable(test_l2_module module/test_l2_module.c stubs/defense_stub.c stubs/audit_stub.c)
 target_include_directories(test_l2_module PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/module
     ${CMAKE_SOURCE_DIR}/common
     ${CMAKE_SOURCE_DIR}/ironstack
+    ${CMAKE_SOURCE_DIR}
 )
 target_link_libraries(test_l2_module iron_common)
 

@@ -5,6 +5,8 @@
 #include "utils.h"
 #include "../core/iface.h"
 #include "../io/vnic.h"
+#include "../security/defense.h"
+#include "../ironmon/audit.h"
 
 #include <string.h>
 #include <time.h>
@@ -14,6 +16,28 @@
 static arp_entry_t g_arp_table[ARP_TABLE_MAX];
 static int g_arp_count = 0;
 
+/* --- ARP Inspection: trusted IP-MAC bindings --- */
+#define ARP_TRUST_MAX 32
+typedef struct { uint32_t ip; uint8_t mac[6]; bool valid; } arp_trust_t;
+static arp_trust_t g_arp_trust[ARP_TRUST_MAX];
+static int g_arp_trust_count = 0;
+
+void arp_trust_add(uint32_t ip, const uint8_t *mac) {
+    if (g_arp_trust_count >= ARP_TRUST_MAX) return;
+    g_arp_trust[g_arp_trust_count].ip = ip;
+    memcpy(g_arp_trust[g_arp_trust_count].mac, mac, 6);
+    g_arp_trust[g_arp_trust_count].valid = true;
+    g_arp_trust_count++;
+}
+
+static bool arp_inspect_ok(uint32_t ip, const uint8_t *mac) {
+    for (int i = 0; i < g_arp_trust_count; i++) {
+        if (g_arp_trust[i].valid && g_arp_trust[i].ip == ip)
+            return memcmp(g_arp_trust[i].mac, mac, 6) == 0;
+    }
+    return true; /* No binding for this IP, allow */
+}
+
 static uint64_t arp_now(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -22,7 +46,9 @@ static uint64_t arp_now(void) {
 
 int arp_init(void) {
     memset(g_arp_table, 0, sizeof(g_arp_table));
+    memset(g_arp_trust, 0, sizeof(g_arp_trust));
     g_arp_count = 0;
+    g_arp_trust_count = 0;
     LOG_INF(MODULE, "ARP initialized");
     return 0;
 }
@@ -111,7 +137,19 @@ int arp_input(uint8_t *data, int len, int iface_idx) {
     arp_packet_t *arp = (arp_packet_t *)data;
     uint16_t opcode = iron_ntohs(arp->opcode);
 
-    /* Learn sender's MAC regardless of opcode */
+    /* ARP inspection defense */
+    if (defense_is_enabled("arp-inspection")) {
+        if (!arp_inspect_ok(arp->sender_ip, arp->sender_mac)) {
+            char ip_buf[16];
+            LOG_WRN(MODULE, "ARP inspection BLOCKED: %s untrusted MAC %02X:%02X:%02X:%02X:%02X:%02X",
+                    iron_ip_to_str(arp->sender_ip, ip_buf, sizeof(ip_buf)),
+                    arp->sender_mac[0], arp->sender_mac[1], arp->sender_mac[2],
+                    arp->sender_mac[3], arp->sender_mac[4], arp->sender_mac[5]);
+            audit_log_event(AUDIT_ARP_ANOMALY, arp->sender_ip, 0, 0, 0, 0, "inspection failed");
+            return -1;
+        }
+    }
+    /* Learn sender's MAC */
     arp_add_entry(arp->sender_ip, arp->sender_mac);
 
     if (opcode == ARP_OP_REQUEST) {
