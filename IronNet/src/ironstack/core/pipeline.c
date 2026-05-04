@@ -15,6 +15,9 @@
 #include "../ironapps/app_socket.h"
 #include "../ironapps/echo_server.h"
 #include "../ironapps/dns_server.h"
+#include "../ironapps/kv_server.h"
+#include "../ironapps/http_server.h"
+#include "../ironapps/rpc_server.h"
 
 #include <unistd.h>
 
@@ -40,6 +43,9 @@ int iron_pipeline_init(void) {
     app_socket_init();
     echo_server_start();
     dns_server_start();
+    kv_server_start();
+    http_server_start();
+    rpc_server_start();
 
     /* Load config file if specified */
     if (g_conf_file) {

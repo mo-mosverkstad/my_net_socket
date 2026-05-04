@@ -2475,3 +2475,144 @@ After Phase 11b:
 - **14 unit tests + 10 module tests = 24 tests, all passing**
 - Echo and DNS servers tested interactively via daemon
 - Servers auto-start on router launch (port 7 and port 53)
+
+### Bugfix during Phase 11b: TCP checksum
+
+**Problem:** `echo "hello" | nc 10.0.1.1 7` hung — no response from the echo server. Ping worked fine. No debug logs appeared in Terminal 1 for TCP traffic.
+
+**Root cause:** Linux's TCP stack silently drops incoming TCP segments with invalid checksums. Our `tcp_send_segment()` was sending SYN+ACK with checksum=0. Linux received it, validated the checksum, found it wrong, and dropped it without any error message.
+
+**Why ping worked:** ICMP checksum was computed correctly (using `iron_checksum()`). But TCP checksum requires a **pseudo-header** (src_ip + dst_ip + protocol + TCP length) in addition to the TCP header+payload — this was not being computed.
+
+**Fix:** Added TCP checksum computation with pseudo-header to:
+- `tcp_send_segment()` in `tcp.c` — for SYN+ACK and ACK segments
+- `app_socket_send()` in `app_socket.c` — for data segments
+
+**TCP checksum algorithm:**
+```
+sum = 0
+sum += src_ip (as two 16-bit words)
+sum += dst_ip (as two 16-bit words)
+sum += protocol (6 for TCP)
+sum += tcp_segment_length
+sum += each 16-bit word of TCP header + payload
+checksum = ~sum (one's complement)
+```
+
+**Lesson:** When debugging network issues where packets seem to disappear silently, always check checksums. Use `tcpdump -i iron0 -XX -n` to capture raw packets and verify checksums manually or with Wireshark.
+
+**Also fixed:** `ip_output()` ARP resolution for connected routes — was resolving the network address (10.0.1.0) instead of the actual destination IP (10.0.1.2). Fixed by using `dst_ip` when `next_hop == 0`.
+
+---
+
+## Phase 11c: KV Server + HTTP-like + Binary RPC
+
+### What was done
+
+We implemented three complex application servers that serve as attack/fuzz targets, each with different protocol parsing characteristics:
+
+1. **Key-Value store** (TCP port 6379) — text protocol, stateful
+2. **HTTP-like server** (TCP port 8080) — text protocol, request/response
+3. **Binary RPC server** (TCP port 9000) — binary protocol, fixed-size header
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironapps/kv_server.h/c` | Key-Value store with SET/GET/DEL commands |
+| `ironapps/http_server.h/c` | HTTP-like server with GET request parsing |
+| `ironapps/rpc_server.h/c` | Binary RPC with magic/cmd/length header |
+
+### KV Server (port 6379)
+
+**Protocol:** Text-based, one command per line.
+
+**Commands:**
+- `SET key value` → `+OK\r\n`
+- `GET key` → `$value\r\n` or `$nil\r\n`
+- `DEL key` → `+OK\r\n` or `-ERR not found\r\n`
+
+**Storage:** In-memory hash table, max 256 entries.
+
+**Attack surfaces:**
+- Memory exhaustion (fill all 256 entries)
+- Command injection (special characters in key/value)
+- Buffer overflow (oversized key or value)
+- State manipulation (DEL non-existent keys)
+
+### HTTP Server (port 8080)
+
+**Protocol:** Simplified HTTP/1.0.
+
+**Supported:**
+- `GET /` or `GET /index` → 200 OK with "Welcome to IronNet!"
+- `GET /anything_else` → 404 Not Found
+- Non-GET requests → 400 Bad Request
+
+**Attack surfaces:**
+- Header parsing (oversized headers, missing CRLF)
+- Path traversal (`GET /../../../etc/passwd`)
+- Method confusion (POST, PUT, DELETE)
+- Malformed request lines
+
+### RPC Server (port 9000)
+
+**Protocol:** Binary, fixed-size header.
+
+```
+[MAGIC 4B: "IRON" = 0x49524F4E][CMD 2B][LENGTH 2B][PAYLOAD...]
+```
+
+**Commands:**
+- `0x0001` PING → `0x8001` PONG (no payload)
+- `0x0002` ECHO → `0x8002` ECHO_REPLY (same payload)
+- `0x0003` STATUS → `0x8003` STATUS_REPLY ("IronNet RPC OK")
+- Unknown → `0xFFFF` ERROR ("unknown cmd")
+- Bad magic → `0xFFFF` ERROR ("bad magic")
+
+**Attack surfaces:**
+- Length field manipulation (length > actual payload)
+- Invalid magic bytes
+- Truncated packets (< 8 bytes)
+- Integer overflow in length field
+- Command fuzzing (all 65536 possible cmd values)
+
+### All services summary
+
+| Port | Protocol | Service | Attack complexity |
+|------|----------|---------|-------------------|
+| 7 | TCP/UDP | Echo | Low (no parsing) |
+| 53 | UDP | DNS | Medium (name parsing) |
+| 6379 | TCP | KV Store | Medium (text commands, state) |
+| 8080 | TCP | HTTP | Medium (header parsing) |
+| 9000 | TCP | Binary RPC | High (binary protocol, length fields) |
+
+### How to test
+
+```bash
+# KV Store
+echo "SET foo bar" | nc -w2 10.0.1.1 6379    # → +OK
+echo "GET foo" | nc -w2 10.0.1.1 6379        # → $bar
+echo "DEL foo" | nc -w2 10.0.1.1 6379        # → +OK
+echo "GET foo" | nc -w2 10.0.1.1 6379        # → $nil
+
+# HTTP
+echo -e "GET / HTTP/1.0\r\n\r\n" | nc -w2 10.0.1.1 8080          # → 200 OK
+echo -e "GET /secret HTTP/1.0\r\n\r\n" | nc -w2 10.0.1.1 8080    # → 404
+
+# Binary RPC PING
+printf '\x49\x52\x4f\x4e\x00\x01\x00\x00' | nc -w2 10.0.1.1 9000 | xxd
+# Expected: 49524f4e 8001 0000 (IRON + PONG + len=0)
+
+# Binary RPC ECHO with payload "hi"
+printf '\x49\x52\x4f\x4e\x00\x02\x00\x02hi' | nc -w2 10.0.1.1 9000 | xxd
+# Expected: 49524f4e 8002 0002 6869 (IRON + ECHO_REPLY + len=2 + "hi")
+```
+
+### Current test summary
+
+After Phase 11c (Phase 11 complete):
+- **14 unit tests + 10 module tests = 24 tests, all passing**
+- 5 application servers running (echo, DNS, KV, HTTP, RPC)
+- All servers auto-start with the router
+- Tested interactively via `nc` and `dig`

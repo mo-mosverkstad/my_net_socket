@@ -542,6 +542,9 @@ After Phase 11a, the router can complete TCP handshakes with clients. Register a
 After Phase 11b, the router runs:
 - **Echo server** on TCP/UDP port 7 — echoes back any data
 - **DNS server** on UDP port 53 — responds to A record queries from static zone
+- **KV server** on TCP port 6379 — SET/GET/DEL key-value store
+- **HTTP server** on TCP port 8080 — responds to GET requests
+- **RPC server** on TCP port 9000 — binary protocol (PING/ECHO/STATUS)
 
 Test in terminal 2 with:
 ```bash
@@ -559,6 +562,17 @@ sudo apt install dnsutils
 
 # DNS query
 dig @10.0.1.1 ironnet.local
+
+# KV Store
+echo "SET foo bar" | nc -w2 10.0.1.1 6379
+echo "GET foo" | nc -w2 10.0.1.1 6379
+
+# HTTP
+echo -e "GET / HTTP/1.0\r\n\r\n" | nc -w2 10.0.1.1 8080
+
+# Binary RPC (PING command: magic=IRON, cmd=0001, len=0000)
+printf '\x49\x52\x4f\x4e\x00\x01\x00\x00' | nc -w2 10.0.1.1 9000 | xxd
+
 ```
 
 To run all tests:
