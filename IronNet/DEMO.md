@@ -161,8 +161,93 @@ acl deny tcp any any port 22
 | `/dev/net/tun` not found | `sudo mkdir -p /dev/net && sudo mknod /dev/net/tun c 10 200` |
 | `RTNETLINK answers: File exists` | Route already exists (safe to ignore) |
 | No output in Terminal 1 | Use `-d` flag for debug logging |
-| `nc` hangs on permitted port | Expected — no application listening yet (Phase 11) |
-| Ping works but nc doesn't | ICMP is handled by ironstack; TCP needs an app to respond |
+| `nc` hangs on permitted port | Check TCP checksum, use tcpdump to verify SYN+ACK sent |
+| Ping works but nc doesn't | Likely TCP checksum issue — capture with tcpdump |
+
+---
+
+## Packet Capture for Debugging
+
+Use `tcpdump` in a **third terminal** to see raw packets on the TAP interface:
+
+### Capture all traffic with hex dump
+
+```bash
+sudo tcpdump -i iron0 -XX -n
+```
+
+This shows every frame entering/leaving iron0 in full hex + ASCII, including:
+- Ethernet header (MACs, EtherType)
+- IP header (src/dst, TTL, protocol)
+- TCP/UDP header (ports, flags, checksum)
+- Payload
+
+### Capture only TCP traffic
+
+```bash
+sudo tcpdump -i iron0 -XX -n tcp
+```
+
+### Capture only traffic to/from a specific port
+
+```bash
+sudo tcpdump -i iron0 -XX -n port 7
+sudo tcpdump -i iron0 -XX -n port 53
+```
+
+### Save to file for Wireshark analysis
+
+```bash
+sudo tcpdump -i iron0 -w /tmp/iron0.pcap
+# Then open /tmp/iron0.pcap in Wireshark
+```
+
+### Example: debugging echo server
+
+**Terminal 1:** Start router
+```bash
+sudo ./ironstack/ironstack -d ../src/configs/router.conf
+```
+
+**Terminal 2:** Capture packets
+```bash
+sudo tcpdump -i iron0 -XX -n port 7
+```
+
+**Terminal 3:** Send test traffic
+```bash
+echo "hello" | nc -w2 10.0.1.1 7
+```
+
+In Terminal 2 you'll see:
+```
+# SYN from client
+10.0.1.2.54321 > 10.0.1.1.7: Flags [S], seq 12345...
+
+# SYN+ACK from ironstack
+10.0.1.1.7 > 10.0.1.2.54321: Flags [S.], seq 1000, ack 12346...
+
+# ACK from client
+10.0.1.2.54321 > 10.0.1.1.7: Flags [.], ack 1001...
+
+# Data from client ("hello")
+10.0.1.2.54321 > 10.0.1.1.7: Flags [P.], "hello"
+
+# Echo reply from ironstack
+10.0.1.1.7 > 10.0.1.2.54321: Flags [P.], "hello"
+```
+
+### What to look for when debugging
+
+| Symptom | Check in tcpdump |
+|---------|------------------|
+| nc hangs (no response) | Is SYN+ACK being sent? Check flags and checksum |
+| Connection reset | Is RST being sent? By whom? |
+| Data not echoed | Is the data segment arriving? Is the echo reply sent? |
+| ACL deny not working | Is the packet reaching ironstack at all? |
+| ARP issues | Look for ARP requests/replies (EtherType 0x0806) |
+
+Note: A built-in packet trace tool (irontrace) is planned for Phase 15.
 
 ---
 
@@ -453,6 +538,28 @@ Key module tests with visible output:
 - `./tests/test_conntrack_module` and `test_nat_module` also validate audit integration indirectly
 
 After Phase 11a, the router can complete TCP handshakes with clients. Register an app on a port and `nc` will get a SYN+ACK response. See Phase 11b for echo/DNS server implementations.
+
+After Phase 11b, the router runs:
+- **Echo server** on TCP/UDP port 7 — echoes back any data
+- **DNS server** on UDP port 53 — responds to A record queries from static zone
+
+Test in terminal 2 with:
+```bash
+sudo ip addr add 10.0.1.2/24 dev iron0
+sudo ip link set iron0 up
+
+# TCP echo
+echo "hello" | nc 10.0.1.1 7
+
+# UDP echo
+echo "hello" | nc -u 10.0.1.1 7
+
+# This installs dig, nslookup, and host commands.
+sudo apt install dnsutils
+
+# DNS query
+dig @10.0.1.1 ironnet.local
+```
 
 To run all tests:
 ```bash

@@ -82,6 +82,8 @@ int app_socket_send(uint32_t dst_ip, uint16_t dst_port,
         uint8_t tcp_pkt[APP_MAX_RECV_BUF + TCP_HEADER_MIN_LEN];
         if (data_len + TCP_HEADER_MIN_LEN > (int)sizeof(tcp_pkt)) return -1;
 
+        int tcp_total = TCP_HEADER_MIN_LEN + data_len;
+
         /* TCP header */
         memset(tcp_pkt, 0, TCP_HEADER_MIN_LEN);
         tcp_pkt[0] = (src_port >> 8) & 0xFF;
@@ -99,12 +101,33 @@ int app_socket_send(uint32_t dst_ip, uint16_t dst_port,
         tcp_pkt[13] = TCP_FLAG_ACK | TCP_FLAG_PSH;
         /* window */
         tcp_pkt[14] = 0xFF; tcp_pkt[15] = 0xFF;
+        /* checksum at [16..17] = 0 for now */
 
         memcpy(tcp_pkt + TCP_HEADER_MIN_LEN, data, data_len);
 
+        /* Compute TCP checksum with pseudo-header */
+        uint32_t sum = 0;
+        uint8_t *sip = (uint8_t *)&src_ip;
+        uint8_t *dip = (uint8_t *)&dst_ip;
+        sum += (sip[0] << 8) | sip[1];
+        sum += (sip[2] << 8) | sip[3];
+        sum += (dip[0] << 8) | dip[1];
+        sum += (dip[2] << 8) | dip[3];
+        sum += PROTO_TCP;
+        sum += tcp_total;
+        for (int i = 0; i < tcp_total; i += 2) {
+            uint16_t word = (tcp_pkt[i] << 8);
+            if (i + 1 < tcp_total) word |= tcp_pkt[i + 1];
+            sum += word;
+        }
+        while (sum >> 16) sum = (sum >> 16) + (sum & 0xFFFF);
+        uint16_t cksum = ~sum & 0xFFFF;
+        tcp_pkt[16] = (cksum >> 8) & 0xFF;
+        tcp_pkt[17] = cksum & 0xFF;
+
         conn->snd_nxt += data_len;
 
-        return ip_output(src_ip, dst_ip, PROTO_TCP, tcp_pkt, TCP_HEADER_MIN_LEN + data_len);
+        return ip_output(src_ip, dst_ip, PROTO_TCP, tcp_pkt, tcp_total);
     }
 
     return -1;

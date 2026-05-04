@@ -102,6 +102,28 @@ static int tcp_send_segment(uint32_t src_ip, uint32_t dst_ip,
     seg[12] = (5 << 4); /* data offset = 20 bytes */
     seg[13] = flags;
     seg[14] = 0xFF; seg[15] = 0xFF; /* window = 65535 */
+    /* checksum at seg[16..17] = 0 for now, compute below */
+
+    /* Compute TCP checksum with pseudo-header */
+    uint32_t sum = 0;
+    /* Pseudo-header: src_ip, dst_ip, zero, protocol, tcp_length */
+    uint8_t *sip = (uint8_t *)&src_ip;
+    uint8_t *dip = (uint8_t *)&dst_ip;
+    sum += (sip[0] << 8) | sip[1];
+    sum += (sip[2] << 8) | sip[3];
+    sum += (dip[0] << 8) | dip[1];
+    sum += (dip[2] << 8) | dip[3];
+    sum += PROTO_TCP;
+    sum += TCP_HEADER_MIN_LEN;
+    /* TCP header */
+    for (int i = 0; i < TCP_HEADER_MIN_LEN; i += 2) {
+        sum += (seg[i] << 8) | seg[i + 1];
+    }
+    while (sum >> 16) sum = (sum >> 16) + (sum & 0xFFFF);
+    uint16_t cksum = ~sum & 0xFFFF;
+    seg[16] = (cksum >> 8) & 0xFF;
+    seg[17] = cksum & 0xFF;
+
     return ip_output(src_ip, dst_ip, PROTO_TCP, seg, TCP_HEADER_MIN_LEN);
 }
 

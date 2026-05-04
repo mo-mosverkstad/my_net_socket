@@ -14,7 +14,7 @@ ctest --output-on-failure
 
 **Current total: 24 tests (14 unit + 10 module), all passing.**
 
-Note: The CLI (ironctl), audit logging (ironmon), and application socket API (ironapps) are tested interactively via the daemon, not via CTest. See `DEMO.md` for usage examples.
+Note: The CLI (ironctl), audit logging (ironmon), and application servers (ironapps: echo port 7, DNS port 53) are tested interactively via the daemon, not via CTest. See `DEMO.md` for usage examples.
 
 ---
 

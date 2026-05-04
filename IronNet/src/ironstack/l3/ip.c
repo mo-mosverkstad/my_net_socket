@@ -138,7 +138,8 @@ int ip_input(uint8_t *data, int len, int iface_idx) {
     }
 
     uint8_t dst_mac[6];
-    if (arp_resolve(next_hop ? next_hop : hdr->dst_ip, out_iface, dst_mac) != 0) {
+    uint32_t arp_target = (next_hop != 0) ? next_hop : hdr->dst_ip;
+    if (arp_resolve(arp_target, out_iface, dst_mac) != 0) {
         /* ARP not resolved yet — use broadcast as fallback */
         memset(dst_mac, 0xFF, 6);
     }
@@ -188,11 +189,17 @@ int ip_output(uint32_t src_ip, uint32_t dst_ip, uint8_t protocol,
     vnic_t *out = vnic_get(out_iface);
     if (!out) return -1;
 
+    /* For ARP: use dst_ip directly if next_hop is 0 or same subnet (connected route) */
+    uint32_t arp_target = (next_hop != 0) ? next_hop : dst_ip;
+
     uint8_t frame_buf[ETH_MAX_FRAME];
-    uint8_t bcast_mac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    uint8_t dst_mac[6];
+    if (arp_resolve(arp_target, out_iface, dst_mac) != 0) {
+        memset(dst_mac, 0xFF, 6); /* Broadcast fallback */
+    }
     int ip_total = IP_HEADER_MIN_LEN + payload_len;
 
-    int frame_len = eth_build(bcast_mac, out->mac, ETHERTYPE_IPV4,
+    int frame_len = eth_build(dst_mac, out->mac, ETHERTYPE_IPV4,
                               pkt, ip_total, frame_buf, sizeof(frame_buf));
     if (frame_len < 0) return -1;
 

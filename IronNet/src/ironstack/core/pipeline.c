@@ -13,6 +13,8 @@
 #include "../l4/tcp.h"
 #include "../ironmon/audit.h"
 #include "../ironapps/app_socket.h"
+#include "../ironapps/echo_server.h"
+#include "../ironapps/dns_server.h"
 
 #include <unistd.h>
 
@@ -36,6 +38,8 @@ int iron_pipeline_init(void) {
     if (tcp_init() != 0) return -1;
     audit_init(AUDIT_DEFAULT_FILE);
     app_socket_init();
+    echo_server_start();
+    dns_server_start();
 
     /* Load config file if specified */
     if (g_conf_file) {

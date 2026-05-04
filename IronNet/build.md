@@ -243,7 +243,7 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | libiron_common.a | `build/common/libiron_common.a` | Library | Shared utility library |
 | libiron_cli.a | `build/ironctl/libiron_cli.a` | Library | Embedded CLI library |
 | libiron_mon.a | `build/ironmon/libiron_mon.a` | Library | Telemetry & audit library |
-| libiron_apps.a | `build/ironapps/libiron_apps.a` | Library | Application socket API library |
+| libiron_apps.a | `build/ironapps/libiron_apps.a` | Library | Application socket API + echo + DNS servers |
 
 ---
 

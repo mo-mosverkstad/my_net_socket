@@ -2379,3 +2379,99 @@ These are provided by `tests/stubs/app_stub.c` and `tests/stubs/ip_output_stub.c
 After Phase 11a:
 - **14 unit tests + 10 module tests = 24 tests, all passing**
 - Socket API tested interactively via daemon with registered apps (Phase 11b)
+
+---
+
+## Phase 11b: Echo Server + DNS Server
+
+### What was done
+
+We implemented two simple network services that run on top of the ironstack protocol stack, proving the socket API works end-to-end:
+- **Echo server** (TCP + UDP, port 7) — echoes back any received data
+- **DNS server** (UDP, port 53) — responds to A record queries from a static zone table
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironapps/echo_server.h` | Echo server API |
+| `ironapps/echo_server.c` | TCP + UDP echo on port 7 |
+| `ironapps/dns_server.h` | DNS server API |
+| `ironapps/dns_server.c` | UDP DNS on port 53 with static zone, A record response, NXDOMAIN |
+
+### Echo server implementation
+
+**TCP echo (port 7):**
+1. Registers `on_data` and `on_accept` callbacks via `app_socket_listen()`
+2. When data arrives, calls `app_socket_send()` with the same data back to the sender
+3. Connection lifecycle managed by TCP state machine
+
+**UDP echo (port 7):**
+1. Registers `on_data` callback
+2. When UDP packet arrives, sends same payload back via `app_socket_send()`
+
+### DNS server implementation
+
+**Static zone table:**
+```
+example.com         → 93.184.216.34
+ironnet.local       → 10.0.1.1
+server.ironnet.local → 10.0.2.1
+www.ironnet.local   → 10.0.1.100
+```
+
+**Query processing:**
+1. Parse DNS header (12 bytes)
+2. Parse question name (length-prefixed labels: `\x07ironnet\x05local\x00`)
+3. Lookup name in zone table
+4. If found → build response with A record (IP address, TTL=60s)
+5. If not found → build NXDOMAIN response (RCODE=3)
+6. Send response via `app_socket_send()`
+
+**DNS response format:**
+- Copies query as base (preserves ID and question section)
+- Sets QR=1 (response), AA=1 (authoritative)
+- Appends answer section: name pointer + Type A + Class IN + TTL + IP
+
+**Attack surfaces (for future Phase 13):**
+- DNS amplification (small query → large response)
+- DNS spoofing (forged source IP)
+- Malformed queries (truncated, invalid labels, compression pointers)
+- Cache poisoning study (if caching is added later)
+
+### Integration
+
+- `pipeline.c` calls `echo_server_start()` and `dns_server_start()` at init
+- Both servers auto-start when the router launches
+- No configuration needed — they're always available
+
+### How to test (with real TAP)
+
+**Terminal 1:**
+```bash
+sudo ./ironstack/ironstack -d ../src/configs/router.conf
+```
+
+**Terminal 2:**
+```bash
+sudo ip addr add 10.0.1.2/24 dev iron0
+sudo ip link set iron0 up
+
+# TCP echo test
+echo "hello ironnet" | nc 10.0.1.1 7
+
+# UDP echo test
+echo "hello udp" | nc -u -w1 10.0.1.1 7
+
+# DNS query
+dig @10.0.1.1 ironnet.local
+dig @10.0.1.1 www.ironnet.local
+dig @10.0.1.1 nonexistent.com   # → NXDOMAIN
+```
+
+### Current test summary
+
+After Phase 11b:
+- **14 unit tests + 10 module tests = 24 tests, all passing**
+- Echo and DNS servers tested interactively via daemon
+- Servers auto-start on router launch (port 7 and port 53)
