@@ -195,11 +195,188 @@ When you `nc 10.0.1.1 22`:
 
 ## Cleanup
 
-After stopping ironstack (Ctrl+C), the TAP interfaces are automatically removed. If they persist:
+After stopping ironstack (Ctrl+C or `exit` command), the TAP interfaces are automatically removed. If they persist:
 
 ```bash
 sudo ip link delete iron0
 sudo ip link delete iron1
+```
+
+---
+
+## CLI Demo (ironctl)
+
+The router includes an embedded CLI. After startup, you'll see the `ironctl>` prompt where you can type commands interactively.
+
+### Start the router with CLI
+
+```bash
+cd IronNet/build
+sudo ./ironstack/ironstack ../src/configs/router.conf
+```
+
+You'll see startup logs followed by:
+```
+ironctl>
+```
+
+### Show commands
+
+```
+ironctl> help
+Available commands:
+  show stats              - Display counters
+  show routes             - Display routing table
+  show route-tables       - Display all routing tables
+  show arp                - Display ARP table
+  show tcp                - Display TCP connections
+  show conntrack          - Display connection tracking
+  show nat                - Display NAT mappings
+  show interfaces         - Display interfaces
+  show ipsec              - Display IPsec SA/policies
+  route add <prefix>/<len> via <next_hop> iface <idx>
+  route delete <prefix>/<len>
+  acl add <permit|deny> <tcp|udp|icmp|any> port <port>
+  acl delete <rule_id>
+  arp add <ip> <mac>
+  help                    - Show this help
+  exit                    - Stop the router
+```
+
+### View interfaces loaded from config
+
+```
+ironctl> show interfaces
+Interfaces (2):
+  iron0  10.0.1.1/24  MAC 02:00:00:00:00:01  UP
+  iron1  10.0.2.1/24  MAC 02:00:00:00:00:02  UP
+```
+
+### View routes loaded from config
+
+```
+ironctl> show routes
+[INFO ] [ROUTE] --- Routing Table ---
+[INFO ] [ROUTE]   10.0.1.0/24 via 10.0.1.0 iface 0 (hits: 0)
+[INFO ] [ROUTE]   10.0.2.0/24 via 10.0.2.0 iface 1 (hits: 0)
+[INFO ] [ROUTE]   0.0.0.0/0 via 0.0.0.0 iface 0 (hits: 0)
+```
+
+### Add a route at runtime
+
+```
+ironctl> route add 192.168.0.0/16 via 10.0.1.254 iface 0
+[INFO ] [ROUTE] Route added: 192.168.0.0/16 via 10.0.1.254 iface 0
+
+ironctl> show routes
+[INFO ] [ROUTE] --- Routing Table ---
+[INFO ] [ROUTE]   10.0.1.0/24 via 10.0.1.0 iface 0 (hits: 0)
+[INFO ] [ROUTE]   10.0.2.0/24 via 10.0.2.0 iface 1 (hits: 0)
+[INFO ] [ROUTE]   0.0.0.0/0 via 0.0.0.0 iface 0 (hits: 0)
+[INFO ] [ROUTE]   192.168.0.0/16 via 10.0.1.254 iface 0 (hits: 0)
+```
+
+### Add ACL rules at runtime
+
+```
+ironctl> acl add deny tcp port 443
+[INFO ] [ACL] Rule 100 added (DENY)
+
+ironctl> acl show
+[INFO ] [ACL] --- ACL Rules ---
+[INFO ] [ACL]   Rule 1: PERMIT (hits: 5)
+[INFO ] [ACL]   Rule 2: PERMIT (hits: 12)
+[INFO ] [ACL]   Rule 3: DENY (hits: 3)
+[INFO ] [ACL]   Rule 100: DENY (hits: 0)
+[INFO ] [ACL]   Default: PERMIT
+```
+
+### Add static ARP entry
+
+```
+ironctl> arp add 10.0.1.5 02:00:00:00:00:05
+ARP entry added.
+
+ironctl> show arp
+[INFO ] [ARP] --- ARP Table ---
+[INFO ] [ARP]   10.0.1.5 -> 02:00:00:00:00:05
+```
+
+### View live statistics (after some traffic)
+
+```
+ironctl> show stats
+[INFO ] [STATS] --- IronNet Statistics ---
+[INFO ] [STATS]   l2.rx_frames                   47
+[INFO ] [STATS]   l3.rx_packets                  35
+[INFO ] [STATS]   l3.local_deliver               20
+[INFO ] [STATS]   l3.drops.acl                   3
+[INFO ] [STATS]   tcp.conn_created               2
+[INFO ] [STATS] --- End ---
+```
+
+### View TCP connections
+
+```
+ironctl> show tcp
+[INFO ] [TCP] --- TCP Connections (2 active) ---
+[INFO ] [TCP]   10.0.1.2:54321 -> 10.0.1.1:80  state=SYN_RECV
+[INFO ] [TCP]   10.0.1.2:54322 -> 10.0.1.1:80  state=SYN_RECV
+```
+
+### Delete a route
+
+```
+ironctl> route delete 192.168.0.0/16
+Route deleted.
+```
+
+### Delete an ACL rule
+
+```
+ironctl> acl delete 100
+ACL rule 100 deleted.
+```
+
+### Graceful shutdown
+
+```
+ironctl> exit
+[INFO ] [MAIN] Shutting down...
+[INFO ] [STATS] --- IronNet Statistics ---
+...
+[INFO ] [MAIN] IronNet stopped.
+```
+
+### CLI + Traffic Demo (two terminals)
+
+**Terminal 1: Start router with CLI**
+```bash
+sudo ./ironstack/ironstack -d ../src/configs/router.conf
+```
+
+**Terminal 2: Generate traffic**
+```bash
+sudo ip addr add 10.0.1.2/24 dev iron0
+sudo ip link set iron0 up
+ping -c 3 10.0.1.1
+nc -zv 10.0.1.1 22
+```
+
+**Terminal 1: Observe and interact**
+```
+# You'll see debug logs for each packet, then at the prompt:
+ironctl> show stats
+# See counters updated with the traffic
+
+ironctl> show arp
+# See 10.0.1.2 learned from ping
+
+ironctl> acl add deny icmp port 0
+# Now ping will be blocked
+
+ironctl> show stats
+# See l3.drops.acl increasing
 ```
 
 ---

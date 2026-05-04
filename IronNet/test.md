@@ -14,6 +14,8 @@ ctest --output-on-failure
 
 **Current total: 24 tests (14 unit + 10 module), all passing.**
 
+Note: The CLI (ironctl) is tested interactively via the daemon, not via CTest. See `DEMO.md` for CLI usage examples.
+
 ---
 
 ## Unit Tests

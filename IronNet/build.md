@@ -61,11 +61,32 @@ cd IronNet/build
 ./ironstack/ironstack
 ```
 
-### Start as virtual router (with config file)
+### Start as virtual router with CLI
 
 ```bash
 cd IronNet/build
 sudo ./ironstack/ironstack ../src/configs/router.conf
+```
+
+After startup, you'll see the `ironctl>` prompt. Type `help` for available commands.
+
+### CLI commands (at the ironctl> prompt)
+
+```
+show stats              - Display counters
+show routes             - Display routing table
+show interfaces         - Display interfaces
+show arp                - Display ARP table
+show tcp                - Display TCP connections
+show conntrack          - Display connection tracking
+show nat                - Display NAT mappings
+show ipsec              - Display IPsec SA/policies
+route add <prefix>/<len> via <next_hop> iface <idx>
+route delete <prefix>/<len>
+acl add <permit|deny> <tcp|udp|icmp|any> port <port>
+acl delete <rule_id>
+arp add <ip> <mac>
+exit                    - Stop the router
 ```
 
 ### Enable debug logging
@@ -215,6 +236,7 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | test_conntrack_module | `build/tests/test_conntrack_module` | Module test | Connection tracking integration test |
 | test_nat_module | `build/tests/test_nat_module` | Module test | NAT integration test |
 | libiron_common.a | `build/common/libiron_common.a` | Library | Shared utility library |
+| libiron_cli.a | `build/ironctl/libiron_cli.a` | Library | Embedded CLI library |
 
 ---
 

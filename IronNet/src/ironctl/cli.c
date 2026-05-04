@@ -1,0 +1,298 @@
+#include "cli.h"
+#include "log.h"
+#include "stats.h"
+#include "utils.h"
+#include "../ironstack/l3/route.h"
+#include "../ironstack/l3/route_table.h"
+#include "../ironstack/l3/acl.h"
+#include "../ironstack/l3/pbr.h"
+#include "../ironstack/l3/conntrack.h"
+#include "../ironstack/l3/nat.h"
+#include "../ironstack/l2/arp.h"
+#include "../ironstack/l2/vlan.h"
+#include "../ironstack/l4/tcp.h"
+#include "../ironstack/core/iface.h"
+#include "../ironstack/security/ipsec.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <pthread.h>
+#include <stdbool.h>
+
+/* Defined in main.c */
+extern void iron_request_shutdown(void);
+
+#define MODULE "CLI"
+#define CLI_MAX_LINE 256
+#define CLI_MAX_ARGS 16
+
+static pthread_t g_cli_thread;
+static volatile bool g_cli_running = false;
+
+/* Parse line into argc/argv */
+static int cli_tokenize(char *line, char **argv, int max_args) {
+    int argc = 0;
+    char *tok = strtok(line, " \t");
+    while (tok && argc < max_args) {
+        argv[argc++] = tok;
+        tok = strtok(NULL, " \t");
+    }
+    return argc;
+}
+
+/* --- Command handlers --- */
+
+static void cmd_help(void) {
+    printf("Available commands:\n");
+    printf("  show stats              - Display counters\n");
+    printf("  show routes             - Display routing table\n");
+    printf("  show route-tables       - Display all routing tables\n");
+    printf("  show arp                - Display ARP table\n");
+    printf("  show tcp                - Display TCP connections\n");
+    printf("  show conntrack          - Display connection tracking\n");
+    printf("  show nat                - Display NAT mappings\n");
+    printf("  show interfaces         - Display interfaces\n");
+    printf("  show ipsec              - Display IPsec SA/policies\n");
+    printf("  route add <prefix>/<len> via <next_hop> iface <idx>\n");
+    printf("  route delete <prefix>/<len>\n");
+    printf("  acl add <permit|deny> <tcp|udp|icmp|any> port <port>\n");
+    printf("  acl delete <rule_id>\n");
+    printf("  arp add <ip> <mac>\n");
+    printf("  help                    - Show this help\n");
+    printf("  exit                    - Stop the router\n");
+}
+
+static void cmd_show(int argc, char **argv) {
+    if (argc < 2) {
+        printf("Usage: show <stats|routes|route-tables|arp|tcp|conntrack|nat|interfaces|ipsec>\n");
+        return;
+    }
+
+    if (strcmp(argv[1], "stats") == 0) {
+        iron_stats_dump();
+    } else if (strcmp(argv[1], "routes") == 0) {
+        route_dump();
+    } else if (strcmp(argv[1], "route-tables") == 0) {
+        route_table_dump();
+    } else if (strcmp(argv[1], "arp") == 0) {
+        arp_dump();
+    } else if (strcmp(argv[1], "tcp") == 0) {
+        tcp_dump();
+    } else if (strcmp(argv[1], "conntrack") == 0) {
+        conntrack_dump();
+    } else if (strcmp(argv[1], "nat") == 0) {
+        nat_dump();
+    } else if (strcmp(argv[1], "interfaces") == 0) {
+        int count = iface_get_count();
+        printf("Interfaces (%d):\n", count);
+        for (int i = 0; i < count; i++) {
+            iface_config_t *ifc = iface_get(i);
+            if (!ifc) continue;
+            char ip_buf[16];
+            printf("  %s  %s/%d  MAC %02X:%02X:%02X:%02X:%02X:%02X  %s\n",
+                   ifc->name,
+                   iron_ip_to_str(ifc->ip, ip_buf, sizeof(ip_buf)), ifc->prefix_len,
+                   ifc->mac[0], ifc->mac[1], ifc->mac[2],
+                   ifc->mac[3], ifc->mac[4], ifc->mac[5],
+                   ifc->up ? "UP" : "DOWN");
+        }
+    } else if (strcmp(argv[1], "ipsec") == 0) {
+        ipsec_dump();
+    } else {
+        printf("Unknown: show %s\n", argv[1]);
+    }
+}
+
+static void cmd_route(int argc, char **argv) {
+    if (argc < 2) {
+        printf("Usage: route <add|delete> ...\n");
+        return;
+    }
+
+    if (strcmp(argv[1], "add") == 0) {
+        /* route add 10.0.1.0/24 via 10.0.1.254 iface 0 */
+        if (argc < 6) {
+            printf("Usage: route add <prefix>/<len> via <next_hop> iface <idx>\n");
+            return;
+        }
+        char ip_str[16]; int plen;
+        if (sscanf(argv[2], "%15[^/]/%d", ip_str, &plen) != 2) {
+            printf("Invalid prefix: %s\n", argv[2]);
+            return;
+        }
+        uint32_t next_hop = iron_str_to_ip(argv[4]);
+        int out_iface = atoi(argv[6]);
+        ip_prefix_t prefix = { iron_str_to_ip(ip_str), (uint8_t)plen };
+        route_add(prefix, next_hop, out_iface);
+    } else if (strcmp(argv[1], "delete") == 0) {
+        if (argc < 3) {
+            printf("Usage: route delete <prefix>/<len>\n");
+            return;
+        }
+        char ip_str[16]; int plen;
+        if (sscanf(argv[2], "%15[^/]/%d", ip_str, &plen) != 2) {
+            printf("Invalid prefix: %s\n", argv[2]);
+            return;
+        }
+        ip_prefix_t prefix = { iron_str_to_ip(ip_str), (uint8_t)plen };
+        if (route_delete(prefix) == 0)
+            printf("Route deleted.\n");
+        else
+            printf("Route not found.\n");
+    } else {
+        printf("Unknown: route %s\n", argv[1]);
+    }
+}
+
+static void cmd_acl(int argc, char **argv) {
+    if (argc < 2) {
+        printf("Usage: acl <add|delete|show> ...\n");
+        return;
+    }
+
+    if (strcmp(argv[1], "add") == 0) {
+        /* acl add permit tcp port 80 */
+        if (argc < 5) {
+            printf("Usage: acl add <permit|deny> <tcp|udp|icmp|any> port <port>\n");
+            return;
+        }
+        acl_action_t action = (strcmp(argv[2], "permit") == 0) ? ACL_PERMIT : ACL_DENY;
+        ip_protocol_t proto = PROTO_ANY;
+        if (strcmp(argv[3], "tcp") == 0) proto = PROTO_TCP;
+        else if (strcmp(argv[3], "udp") == 0) proto = PROTO_UDP;
+        else if (strcmp(argv[3], "icmp") == 0) proto = PROTO_ICMP;
+
+        uint16_t port = 0;
+        if (argc >= 6 && strcmp(argv[4], "port") == 0)
+            port = (uint16_t)atoi(argv[5]);
+
+        static uint32_t acl_id_counter = 100;
+        acl_match_t m = {0};
+        m.protocol = proto;
+        if (port > 0) m.dst_port = (port_range_t){port, port};
+        acl_add_rule(acl_id_counter++, &m, action);
+    } else if (strcmp(argv[1], "delete") == 0) {
+        if (argc < 3) {
+            printf("Usage: acl delete <rule_id>\n");
+            return;
+        }
+        uint32_t rule_id = (uint32_t)atoi(argv[2]);
+        if (acl_delete_rule(rule_id) == 0)
+            printf("ACL rule %u deleted.\n", rule_id);
+        else
+            printf("ACL rule %u not found.\n", rule_id);
+    } else if (strcmp(argv[1], "show") == 0) {
+        acl_dump();
+    } else {
+        printf("Unknown: acl %s\n", argv[1]);
+    }
+}
+
+static void cmd_arp_cli(int argc, char **argv) {
+    if (argc < 2) {
+        printf("Usage: arp <add|show> ...\n");
+        return;
+    }
+
+    if (strcmp(argv[1], "add") == 0) {
+        /* arp add 10.0.1.5 02:00:00:00:00:05 */
+        if (argc < 4) {
+            printf("Usage: arp add <ip> <mac>\n");
+            return;
+        }
+        uint32_t ip = iron_str_to_ip(argv[2]);
+        uint8_t mac[6];
+        if (sscanf(argv[3], "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+                   &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]) != 6) {
+            printf("Invalid MAC: %s\n", argv[3]);
+            return;
+        }
+        arp_add_entry(ip, mac);
+        printf("ARP entry added.\n");
+    } else if (strcmp(argv[1], "show") == 0) {
+        arp_dump();
+    } else {
+        printf("Unknown: arp %s\n", argv[1]);
+    }
+}
+
+/* --- Main command dispatch --- */
+
+int cli_execute(const char *line) {
+    char buf[CLI_MAX_LINE];
+    strncpy(buf, line, CLI_MAX_LINE - 1);
+    buf[CLI_MAX_LINE - 1] = 0;
+
+    char *argv[CLI_MAX_ARGS];
+    int argc = cli_tokenize(buf, argv, CLI_MAX_ARGS);
+    if (argc == 0) return 0;
+
+    if (strcmp(argv[0], "help") == 0 || strcmp(argv[0], "?") == 0) {
+        cmd_help();
+    } else if (strcmp(argv[0], "show") == 0) {
+        cmd_show(argc, argv);
+    } else if (strcmp(argv[0], "route") == 0) {
+        cmd_route(argc, argv);
+    } else if (strcmp(argv[0], "acl") == 0) {
+        cmd_acl(argc, argv);
+    } else if (strcmp(argv[0], "arp") == 0) {
+        cmd_arp_cli(argc, argv);
+    } else if (strcmp(argv[0], "exit") == 0 || strcmp(argv[0], "quit") == 0) {
+        iron_request_shutdown();
+        return -1; /* Signal to stop */
+    } else {
+        printf("Unknown command: %s (type 'help' for commands)\n", argv[0]);
+    }
+
+    return 0;
+}
+
+/* --- CLI thread --- */
+
+static void *cli_thread_func(void *arg) {
+    (void)arg;
+    char line[CLI_MAX_LINE];
+
+    printf("\nironctl> ");
+    fflush(stdout);
+
+    while (g_cli_running) {
+        if (fgets(line, sizeof(line), stdin) == NULL) break;
+
+        /* Strip newline */
+        line[strcspn(line, "\r\n")] = 0;
+
+        if (line[0] == 0) {
+            printf("ironctl> ");
+            fflush(stdout);
+            continue;
+        }
+
+        int rc = cli_execute(line);
+        if (rc == -1) {
+            g_cli_running = false;
+            break;
+        }
+
+        printf("ironctl> ");
+        fflush(stdout);
+    }
+
+    return NULL;
+}
+
+int cli_start(void) {
+    g_cli_running = true;
+    if (pthread_create(&g_cli_thread, NULL, cli_thread_func, NULL) != 0) {
+        LOG_ERR(MODULE, "Failed to start CLI thread");
+        return -1;
+    }
+    LOG_INF(MODULE, "CLI started (type 'help' for commands)");
+    return 0;
+}
+
+void cli_stop(void) {
+    g_cli_running = false;
+    /* Note: thread may be blocked on fgets, will exit on next input or EOF */
+}

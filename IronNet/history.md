@@ -2104,3 +2104,106 @@ cd IronNet/build
 # All tests
 ctest --output-on-failure
 ```
+
+---
+
+## Phase 9: Control Plane — ironctl
+
+### What was done
+
+We implemented an embedded CLI (command-line interface) that runs as a thread inside the ironstack daemon, allowing real-time configuration and monitoring while the router processes packets.
+
+### Design decision
+
+Two options were considered:
+
+| Option | Architecture | Chosen? |
+|--------|-------------|---------|
+| **Embedded CLI** | CLI thread inside ironstack, reads stdin | ✅ Yes |
+| Separate process | ironctl connects via Unix socket | No (too complex for research) |
+
+The embedded approach was chosen because it's simpler, faster to build, and sufficient for a research project. The CLI thread reads stdin while the main loop processes packets concurrently.
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironctl/cli.h` | CLI API: start, stop, execute |
+| `ironctl/cli.c` | Command parsing, dispatch, thread management |
+| `ironctl/CMakeLists.txt` | Builds iron_cli as static library |
+
+### Implementation details
+
+**Architecture:**
+- `cli_start()` spawns a pthread that reads stdin in a loop
+- Each line is tokenized into argc/argv and dispatched to command handlers
+- Commands execute immediately against the live data plane (routes, ACLs, etc.)
+- `exit` command calls `iron_request_shutdown()` to stop the main loop
+- CLI thread exits when `g_cli_running` is set to false
+
+**Command dispatch:**
+```
+line → tokenize → match first word → call handler(argc, argv)
+```
+
+**Supported commands:**
+
+| Command | Action |
+|---------|--------|
+| `help` | List all commands |
+| `show stats` | Print all non-zero counters |
+| `show routes` | Print routing table |
+| `show route-tables` | Print all named routing tables |
+| `show arp` | Print ARP table |
+| `show tcp` | Print TCP connections |
+| `show conntrack` | Print connection tracking entries |
+| `show nat` | Print NAT mappings |
+| `show interfaces` | Print configured interfaces |
+| `show ipsec` | Print IPsec SA and policies |
+| `route add <prefix>/<len> via <nh> iface <idx>` | Add route at runtime |
+| `route delete <prefix>/<len>` | Remove route |
+| `acl add <permit\|deny> <proto> port <port>` | Add ACL rule |
+| `acl delete <rule_id>` | Remove ACL rule |
+| `acl show` | Show ACL rules |
+| `arp add <ip> <mac>` | Add static ARP entry |
+| `exit` / `quit` | Graceful shutdown |
+
+**Thread safety:**
+- The CLI thread and main loop access shared data structures (routes, ACLs, etc.)
+- For this research project, operations are simple enough that race conditions are unlikely in practice
+- A production system would need mutexes around shared state
+
+### Integration
+
+- `main.c` calls `cli_start()` after pipeline init
+- `main.c` calls `cli_stop()` during shutdown
+- `iron_request_shutdown()` in main.c allows CLI's `exit` command to stop the daemon
+- ironstack links against `libiron_cli.a` and `pthread`
+
+### How to use
+
+```bash
+# Start router with CLI
+sudo ./ironstack/ironstack ../src/configs/router.conf
+
+# At the prompt:
+ironctl> show interfaces
+ironctl> show routes
+ironctl> route add 192.168.0.0/16 via 10.0.1.254 iface 0
+ironctl> acl add deny tcp port 443
+ironctl> show stats
+ironctl> exit
+```
+
+### Testing
+
+The CLI is tested interactively (not via CTest). Commands can also be piped:
+```bash
+echo -e "show routes\nexit" | ./ironstack/ironstack ../src/configs/router.conf
+```
+
+### Current test summary
+
+After Phase 9:
+- **14 unit tests + 10 module tests = 24 tests, all passing**
+- CLI tested interactively via daemon (see DEMO.md)

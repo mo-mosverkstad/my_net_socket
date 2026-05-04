@@ -31,8 +31,8 @@ enable_testing()
 
 # Subdirectories
 add_subdirectory(common)
-add_subdirectory(ironstack)
 add_subdirectory(ironctl)
+add_subdirectory(ironstack)
 add_subdirectory(ironmon)
 add_subdirectory(ironapps)
 add_subdirectory(tests)

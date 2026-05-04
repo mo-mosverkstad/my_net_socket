@@ -28,4 +28,4 @@ target_include_directories(ironstack PRIVATE
     ${CMAKE_SOURCE_DIR}/common
 )
 
-target_link_libraries(ironstack iron_common)
+target_link_libraries(ironstack iron_common iron_cli pthread)

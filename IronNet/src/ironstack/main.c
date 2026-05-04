@@ -5,10 +5,16 @@
 #include "stats.h"
 #include "core/pipeline.h"
 #include "core/config.h"
+#include "../ironctl/cli.h"
 
 #define MODULE "MAIN"
 
 static volatile int g_running = 1;
+
+/* Allow CLI to signal shutdown */
+void iron_request_shutdown(void) {
+    g_running = 0;
+}
 
 static void signal_handler(int sig) {
     (void)sig;
@@ -59,11 +65,15 @@ int main(int argc, char *argv[]) {
 
     LOG_INF(MODULE, "IronNet running. Press Ctrl+C to stop.");
 
+    /* Start CLI thread */
+    cli_start();
+
     while (g_running) {
         iron_pipeline_run_once();
     }
 
     LOG_INF(MODULE, "Shutting down...");
+    cli_stop();
     iron_stats_dump();
     iron_pipeline_shutdown();
     iron_config_shutdown();

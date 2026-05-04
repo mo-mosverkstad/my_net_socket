@@ -551,6 +551,15 @@ A **bridge** (or Layer 2 switch) connects multiple ports and forwards Ethernet f
 - CLI for real-time configuration
 - In-memory config database with live application
 
+### Design Options
+
+| Option | Architecture | Pros | Cons |
+|--------|-------------|------|------|
+| **1. Embedded CLI (chosen)** | CLI thread inside ironstack process | Simple, fast to build, easy to debug, no IPC | Single process, no remote access |
+| 2. Separate process | ironctl connects to ironstack via Unix socket | Realistic (like vtysh/FRR), remote capable | Requires IPC, serialization, more complex |
+
+**Decision:** Option 1 (Embedded CLI) — a dedicated thread reads stdin for commands while the main loop processes packets. This is sufficient for a research project and demonstrates all control plane concepts without IPC complexity.
+
 ### Tasks
 
 1. **CLI parser (`ironctl/cli.cpp`, `parser.cpp`)**
