@@ -14,7 +14,7 @@ ctest --output-on-failure
 
 **Current total: 24 tests (14 unit + 10 module), all passing.**
 
-Note: The CLI (ironctl), audit logging (ironmon), application servers (ironapps: echo port 7, DNS port 53, KV port 6379, HTTP port 8080, RPC port 9000), and network scanner (ironprobe) are tested interactively via the daemon, not via CTest. See `DEMO.md` for usage examples.
+Note: The CLI (ironctl), audit logging (ironmon), application servers (ironapps: echo port 7, DNS port 53, KV port 6379, HTTP port 8080, RPC port 9000), network scanner (ironprobe), and protocol fuzzer (ironfuzz) are tested interactively via the daemon, not via CTest. See `DEMO.md` for usage examples.
 
 ---
 

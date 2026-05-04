@@ -536,6 +536,32 @@ ironctl> acl-check 10.0.1.1
 ACL validation: 0 mismatches
 ```
 
+### Protocol Fuzzer (ironfuzz)
+
+Fuzz test the protocol stack with mutated packets:
+
+```
+ironctl> fuzz tcp 1000
+[INFO ] [FUZZ] Fuzzing started: 1000 iterations, 1 seeds
+[INFO ] [FUZZ] Fuzzing complete: 1000 iterations, 0 crashes
+=== Fuzzer Statistics ===
+  Iterations:   1000
+  Crashes:      0
+  Mutations:    1000
+  Corpus size:  1 seeds
+
+ironctl> fuzz dns 500
+[INFO ] [FUZZ] Fuzzing complete: 500 iterations, 0 crashes
+
+ironctl> fuzz http 500
+[INFO ] [FUZZ] Fuzzing complete: 500 iterations, 0 crashes
+
+ironctl> fuzz rpc 500
+[INFO ] [FUZZ] Fuzzing complete: 500 iterations, 0 crashes
+```
+
+Mutation strategies applied: bit-flip, byte-flip, truncate, extend, boundary values, insert, delete, field-aware.
+
 ### Audit log file
 
 Events are also written to `/tmp/ironnet_audit.log` in structured format:

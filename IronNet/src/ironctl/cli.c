@@ -16,6 +16,7 @@
 #include "../ironmon/audit.h"
 #include "../ironmon/stats_json.h"
 #include "../ironprobe/probe.h"
+#include "../ironfuzz/fuzz.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -70,6 +71,7 @@ static void cmd_help(void) {
     printf("  scan <ip> [start] [end] - Scan ports on target\n");
     printf("  ping <ip>               - Check if target is alive\n");
     printf("  acl-check <ip>          - Validate ACL enforcement\n");
+    printf("  fuzz <tcp|dns|http|rpc> <iterations> - Fuzz a target\n");
     printf("  help                    - Show this help\n");
     printf("  exit                    - Stop the router\n");
 }
@@ -292,6 +294,45 @@ int cli_execute(const char *line) {
             int mismatches;
             probe_acl_validate(target, expect_open, 5, expect_filtered, 1, &mismatches);
             printf("ACL validation: %d mismatches\n", mismatches);
+        }
+    } else if (strcmp(argv[0], "fuzz") == 0) {
+        /* fuzz <target> <iterations> */
+        /* targets: tcp, dns, http, rpc */
+        if (argc < 3) {
+            printf("Usage: fuzz <tcp|dns|http|rpc> <iterations>\n");
+        } else {
+            int iters = atoi(argv[2]);
+            fuzz_engine_t engine;
+            fuzz_init(&engine);
+
+            uint8_t seed_buf[FUZZ_MAX_PACKET];
+            int seed_len;
+
+            if (strcmp(argv[1], "tcp") == 0) {
+                seed_len = fuzz_seed_tcp_syn(seed_buf, sizeof(seed_buf));
+                fuzz_add_seed(&engine, "tcp_syn", seed_buf, seed_len);
+                extern int tcp_input(uint32_t, uint32_t, uint8_t*, int, int);
+                fuzz_run(&engine, iters, (int(*)(const uint8_t*,int))tcp_input);
+            } else if (strcmp(argv[1], "dns") == 0) {
+                seed_len = fuzz_seed_dns_query(seed_buf, sizeof(seed_buf));
+                fuzz_add_seed(&engine, "dns_query", seed_buf, seed_len);
+                extern int udp_input(uint32_t, uint32_t, uint8_t*, int, int);
+                fuzz_run(&engine, iters, (int(*)(const uint8_t*,int))udp_input);
+            } else if (strcmp(argv[1], "http") == 0) {
+                seed_len = fuzz_seed_http_get(seed_buf, sizeof(seed_buf));
+                fuzz_add_seed(&engine, "http_get", seed_buf, seed_len);
+                extern int tcp_input(uint32_t, uint32_t, uint8_t*, int, int);
+                fuzz_run(&engine, iters, (int(*)(const uint8_t*,int))tcp_input);
+            } else if (strcmp(argv[1], "rpc") == 0) {
+                seed_len = fuzz_seed_rpc_ping(seed_buf, sizeof(seed_buf));
+                fuzz_add_seed(&engine, "rpc_ping", seed_buf, seed_len);
+                extern int tcp_input(uint32_t, uint32_t, uint8_t*, int, int);
+                fuzz_run(&engine, iters, (int(*)(const uint8_t*,int))tcp_input);
+            } else {
+                printf("Unknown target: %s (use tcp|dns|http|rpc)\n", argv[1]);
+            }
+
+            fuzz_print_stats(&engine);
         }
     } else if (strcmp(argv[0], "audit") == 0) {
         if (argc >= 2 && strcmp(argv[1], "enable") == 0) {
