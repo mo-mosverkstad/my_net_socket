@@ -1962,3 +1962,145 @@ After Phase 8d:
 - **13 unit tests**
 - **9 module tests**
 - **Total: 22 tests, all passing**
+
+---
+
+## Phase 8e: NAT (Network Address Translation)
+
+### What was done
+
+We implemented NAT (Network Address Translation) with both SNAT (Source NAT / masquerade) and DNAT (Destination NAT / port forwarding), including automatic return-path translation via mapping tables.
+
+### Concepts explained
+
+**What is NAT?**
+
+NAT rewrites IP addresses (and ports) in packet headers as they pass through a router. It's used to:
+- Share one public IP among many internal hosts (SNAT/masquerade)
+- Expose internal services on a public IP (DNAT/port forwarding)
+- Hide internal network topology from external observers
+
+**SNAT (Source NAT / Masquerade):**
+```
+Internal host 10.0.1.5:5000 → Internet 8.8.8.8:80
+After SNAT:   203.0.113.1:10000 → 8.8.8.8:80
+
+Return traffic: 8.8.8.8:80 → 203.0.113.1:10000
+After reverse: 8.8.8.8:80 → 10.0.1.5:5000
+```
+
+Multiple internal hosts share one public IP by using different allocated ports.
+
+**DNAT (Destination NAT / Port Forwarding):**
+```
+External client 1.2.3.4:54321 → Public IP 203.0.113.1:80
+After DNAT:    1.2.3.4:54321 → Internal server 10.0.1.100:8080
+```
+
+**Mapping table:**
+
+Every NAT translation creates a mapping that records:
+- Original 5-tuple (before translation)
+- Translated 5-tuple (after translation)
+- Type (SNAT or DNAT)
+
+Return traffic is matched against existing mappings and reverse-translated automatically.
+
+**Port allocation pool:**
+
+For SNAT, each new flow gets a unique port from the pool (10000–65000). This prevents collisions when multiple internal hosts connect to the same external server.
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironstack/l3/nat.h` | NAT rules, mappings, SNAT/DNAT API |
+| `ironstack/l3/nat.c` | Translation logic, port allocation, return-path |
+| `tests/unit/test_nat.c` | 6 unit tests |
+| `tests/module/test_nat_module.c` | 4 module tests |
+
+### Implementation details
+
+**NAT rules:**
+- SNAT: match source prefix → rewrite to public IP + allocate port
+- DNAT: match destination IP + port → rewrite to internal IP + port
+
+**Mapping lifecycle:**
+1. Outbound packet matches SNAT rule → create mapping, allocate port, translate
+2. Return traffic matches mapping (reverse direction) → reverse-translate
+3. Mapping expires after 300 seconds of inactivity
+
+**Key behaviors:**
+- Same flow reuses existing mapping (no duplicate allocation)
+- Different flows get different ports (no collision)
+- No rule matched → return code 1 (pass-through, packet unchanged)
+- Mapping table full → evict oldest entry
+
+**Relationship to conntrack:**
+
+NAT and conntrack are complementary:
+- Conntrack tracks connection state (NEW/ESTABLISHED)
+- NAT uses mappings for address translation
+- In a full integration, NAT would create conntrack entries automatically
+- Stateful ACL + NAT together provide: "allow established return traffic with correct reverse translation"
+
+### Tests created
+
+#### Unit test: test_nat (6 tests)
+
+- `test_snat_outbound` — Source IP rewritten to public, port allocated
+- `test_snat_return_traffic` — Return traffic reverse-translated to original internal IP:port
+- `test_dnat_inbound` — Destination rewritten to internal server
+- `test_no_rule_passthrough` — No rule → packet unchanged
+- `test_snat_reuses_mapping` — Same flow uses same mapping
+- `test_different_flows_different_ports` — Different hosts get different ports
+
+#### Module test: test_nat_module (4 tests)
+
+**Test 1: SNAT roundtrip**
+- 10.0.1.5:5000 → 8.8.8.8:443 becomes 203.0.113.1:10000 → 8.8.8.8:443
+- Return 8.8.8.8:443 → 203.0.113.1:10000 becomes 8.8.8.8:443 → 10.0.1.5:5000
+
+**Test 2: DNAT port forwarding**
+- 1.2.3.4:54321 → 203.0.113.1:80 becomes 1.2.3.4:54321 → 10.0.1.100:8080
+
+**Test 3: Multiple hosts share one public IP**
+- 10.0.1.5 → port 10000, 10.0.1.6 → port 10001, 10.0.1.7 → port 10002
+- All use 203.0.113.1 as public IP
+
+**Test 4: No rule pass-through**
+- No NAT configured → packet unchanged, rc=1
+
+### Phase 8 complete summary
+
+All 5 sub-phases of Phase 8 are now done:
+
+| Sub-phase | Component | Tests |
+|-----------|-----------|-------|
+| 8a | VLAN (802.1Q) | 7 unit + 4 module |
+| 8b | Bridge (L2 forwarding) | 4 module |
+| 8c | Multiple Routing Tables | 6 unit + 3 module |
+| 8d | Connection Tracking | 6 unit + 4 module |
+| 8e | NAT | 6 unit + 4 module |
+
+### Current test summary
+
+After Phase 8 (complete):
+- **14 unit tests**: test_stats, test_eth, test_route, test_acl, test_tcp, test_ipsec, test_vlan, test_arp, test_ip_frag, test_iface, test_pbr, test_route_table, test_conntrack, test_nat
+- **10 module tests**: test_l2_module, test_l3_module, test_pbr_acl_module, test_l4_module, test_ipsec_module, test_vlan_module, test_bridge_module, test_route_table_module, test_conntrack_module, test_nat_module
+- **Total: 24 tests, all passing**
+
+### How to run Phase 8e tests
+
+```bash
+cd IronNet/build
+
+# NAT unit test
+./tests/test_nat
+
+# NAT module test (verbose)
+./tests/test_nat_module
+
+# All tests
+ctest --output-on-failure
+```

@@ -86,6 +86,13 @@ target_include_directories(test_conntrack PRIVATE
 )
 target_link_libraries(test_conntrack iron_common)
 
+add_executable(test_nat unit/test_nat.c)
+target_include_directories(test_nat PRIVATE
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+)
+target_link_libraries(test_nat iron_common)
+
 # Module tests
 add_executable(test_l2_module module/test_l2_module.c)
 target_include_directories(test_l2_module PRIVATE
@@ -159,6 +166,14 @@ target_include_directories(test_conntrack_module PRIVATE
 )
 target_link_libraries(test_conntrack_module iron_common)
 
+add_executable(test_nat_module module/test_nat_module.c)
+target_include_directories(test_nat_module PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/module
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+)
+target_link_libraries(test_nat_module iron_common)
+
 enable_testing()
 
 # Unit tests
@@ -175,6 +190,7 @@ add_test(NAME test_iface COMMAND test_iface)
 add_test(NAME test_pbr COMMAND test_pbr)
 add_test(NAME test_route_table COMMAND test_route_table)
 add_test(NAME test_conntrack COMMAND test_conntrack)
+add_test(NAME test_nat COMMAND test_nat)
 
 # Module tests
 add_test(NAME module_l2 COMMAND test_l2_module)
@@ -186,3 +202,4 @@ add_test(NAME module_vlan COMMAND test_vlan_module)
 add_test(NAME module_bridge COMMAND test_bridge_module)
 add_test(NAME module_route_table COMMAND test_route_table_module)
 add_test(NAME module_conntrack COMMAND test_conntrack_module)
+add_test(NAME module_nat COMMAND test_nat_module)

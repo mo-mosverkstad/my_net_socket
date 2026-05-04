@@ -12,7 +12,7 @@ ctest --output-on-failure
 ../src/tests/run_module_tests.sh .
 ```
 
-**Current total: 22 tests (13 unit + 9 module), all passing.**
+**Current total: 24 tests (14 unit + 10 module), all passing.**
 
 ---
 
@@ -149,6 +149,17 @@ Unit tests are fast, minimal-output correctness checks. Each validates a single 
 | test_unknown_is_invalid | No entry → CT_STATE_INVALID |
 | test_packet_counters | Original and reply packet counts tracked |
 
+### test_nat (6 assertions)
+
+| Test | What it verifies |
+|------|------------------|
+| test_snat_outbound | Source IP rewritten, port allocated from pool |
+| test_snat_return_traffic | Return traffic reverse-translated to original src |
+| test_dnat_inbound | Destination IP+port rewritten to internal server |
+| test_no_rule_passthrough | No rule matched → packet unchanged (rc=1) |
+| test_snat_reuses_mapping | Same flow reuses existing mapping |
+| test_different_flows_different_ports | Different hosts get different allocated ports |
+
 ---
 
 ## Module Tests
@@ -233,6 +244,15 @@ Module tests produce verbose output with hex dumps, decoded fields, and visible 
 | Stateful ACL | Return traffic PERMIT (established), unsolicited DENY (invalid) |
 | Timeout expiry | UDP entry expires after 30s timeout |
 
+### test_nat_module (4 test cases)
+
+| Test | What it demonstrates |
+|------|---------------------|
+| SNAT roundtrip | Outbound translated, return traffic reverse-translated |
+| DNAT port forwarding | External 203.0.113.1:80 → internal 10.0.1.100:8080 |
+| Multiple hosts share IP | 3 hosts get different ports on same public IP |
+| No rule pass-through | No NAT configured → packet unchanged |
+
 ---
 
 ## Live Demo
@@ -266,6 +286,7 @@ ctest --output-on-failure
 ./tests/test_pbr
 ./tests/test_route_table
 ./tests/test_conntrack
+./tests/test_nat
 
 # Single module test (verbose)
 ./tests/test_l2_module
@@ -277,6 +298,7 @@ ctest --output-on-failure
 ./tests/test_bridge_module
 ./tests/test_route_table_module
 ./tests/test_conntrack_module
+./tests/test_nat_module
 
 # All module tests via script
 ../src/tests/run_module_tests.sh .

@@ -16,6 +16,7 @@ add_executable(ironstack
     l3/acl.c
     l3/pbr.c
     l3/conntrack.c
+    l3/nat.c
     l3/ip_frag.c
     l4/udp.c
     l4/tcp.c
