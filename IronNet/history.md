@@ -2616,3 +2616,87 @@ After Phase 11c (Phase 11 complete):
 - 5 application servers running (echo, DNS, KV, HTTP, RPC)
 - All servers auto-start with the router
 - Tested interactively via `nc` and `dig`
+
+---
+
+## Phase 12a: ironprobe — Network Scanner
+
+### What was done
+
+We implemented a network scanner (ironprobe) that can discover open ports, check host availability, fingerprint services, and validate ACL enforcement — all from within the router's CLI.
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironprobe/probe.h` | Scanner API, port state enum, result structures |
+| `ironprobe/probe.c` | TCP scan, ICMP ping, fingerprinting, ACL validation |
+| `ironprobe/CMakeLists.txt` | Builds iron_probe as static library |
+
+### Implementation details
+
+**Internal scanning approach:**
+
+Rather than sending real packets over the network, the scanner checks the stack's internal state directly:
+1. Is the target IP local? (If not → all ports CLOSED)
+2. Would ACL deny traffic to this port? (If yes → FILTERED)
+3. Is an app listener registered? (If yes → OPEN, else → CLOSED)
+
+This allows scanning without sudo/TAP and is fast enough for automated testing.
+
+**Port states:**
+- `OPEN` — application listening, ACL permits
+- `FILTERED` — ACL denies traffic to this port
+- `CLOSED` — no application listening (ACL permits but nothing there)
+
+**Service fingerprinting:**
+- Based on known port assignments (7=echo, 53=dns, 6379=kv-store, 8080=http, 9000=rpc)
+- Future: could send probe packets and classify by response pattern
+
+**ACL validation:**
+- Given lists of expected-open and expected-filtered ports
+- Scans each port and reports mismatches
+- Useful for verifying ACL configuration is correct
+
+### Bugfix: non-existent target IP
+
+Initially the scanner showed open ports for ANY target IP (even non-existent ones) because it only checked the global listener table. Fixed by adding a check: if target IP is not a local interface IP, all ports report as CLOSED.
+
+### CLI commands added
+
+| Command | Description |
+|---------|-------------|
+| `scan <ip> [start] [end]` | Scan port range, show open/filtered/closed |
+| `ping <ip>` | Check if target is alive (local IP check) |
+| `acl-check <ip>` | Validate expected-open and expected-filtered ports |
+
+### Example output
+
+```
+ironctl> scan 10.0.1.1 1 10000
+=== Scan Results for 10.0.1.1 ===
+  Open: 5  Filtered: 1  Closed: 9994
+
+  7      OPEN       echo
+  22     FILTERED   
+  53     OPEN       dns
+  6379   OPEN       kv-store
+  8080   OPEN       http
+  9000   OPEN       rpc
+
+ironctl> scan 10.0.1.3 1 100
+=== Scan Results for 10.0.1.3 ===
+  Open: 0  Filtered: 0  Closed: 100
+
+ironctl> ping 10.0.1.1
+10.0.1.1 is ALIVE
+
+ironctl> ping 10.0.1.3
+10.0.1.3 is UNREACHABLE
+```
+
+### Current test summary
+
+After Phase 12a:
+- **14 unit tests + 10 module tests = 24 tests, all passing**
+- Scanner tested interactively via CLI

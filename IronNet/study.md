@@ -948,52 +948,139 @@ Dynamic routing protocols (OSPF, BGP) are **out of scope** for IronNet. The proj
 
 ---
 
-## Phase 13: Attack Simulation & Defense (Week 33–36)
+## Phase 13: Attack Simulation & Defense (Week 35–40)
+
+### Key difference from Phase 12
+
+| Aspect | Phase 12 (Security Testing) | Phase 13 (Attack & Defense) |
+|--------|---------------------------|-----------------------------|
+| Tools | Generic (scan, fuzz, stress) | Specific named attacks |
+| Mode | Internal (inject into pipeline directly) | **External (real packets via TAP)** |
+| Purpose | Find bugs and crashes | Study attack/defense effectiveness |
+| Binaries | Libraries linked into ironstack | **Separate executables** |
+| Network | No real network needed | Real TAP interfaces, multiple terminals |
+
+### Architecture
+
+```
+Terminal 1: Router (target)
+  sudo ./ironstack/ironstack ../src/configs/router.conf
+
+Terminal 2: Attack tools (attacker)
+  sudo ./ironattack --syn-flood 10.0.1.1 --rate 1000
+  sudo ./ironattack --arp-spoof 10.0.1.1 --gateway 10.0.1.254
+  sudo ./ironprobe-ext --target 10.0.1.1 --ports 1-65535
+
+Terminal 3: Monitor
+  sudo tcpdump -i iron0 -XX -n
+  # Or watch audit log:
+  tail -f /tmp/ironnet_audit.log
+```
+
+Attack tools are **separate binaries** that:
+- Open the TAP interface (or use raw sockets)
+- Craft and send real Ethernet frames / IP packets
+- Simulate real-world attack traffic
+- Measure response (or lack thereof) from the router
 
 ### Goals
 - Simulate specific network attack techniques against the protocol stack
 - Implement defense mechanisms and study their effectiveness
 - Provide a structured penetration testing workflow
+- All attacks use **real packets** through the TAP interface (not internal injection)
 
 ### Tasks
 
-1. **Attack simulation tools (ironattack)**
-   - SYN flood: overwhelm TCP connection table
-   - ARP spoofing: inject fake ARP replies to poison MAC tables
-   - VLAN hopping: craft double-tagged frames to escape VLAN isolation
-   - IP spoofing: forge source IP to bypass ACLs
-   - TCP RST injection: disrupt established connections
-   - ICMP redirect: manipulate routing via crafted ICMP messages
-   - Slowloris-style: hold connections open to exhaust resources
-   - Fragmentation attacks: overlapping fragments, tiny fragments
+1. **Attack tools — ironattack (separate binary)**
 
-2. **Defense mechanisms (irondefense)**
-   - SYN cookies: stateless SYN handling under flood
-   - Rate limiting: per-source connection rate caps
-   - Connection tracking: stateful inspection for return traffic
-   - Anomaly detection: flag unusual packet patterns (invalid flags, unusual sizes)
-   - Blackhole routing: drop traffic to known-bad destinations
-   - ARP inspection: validate ARP against known IP-MAC bindings
-   - VLAN access control: strict trunk/access enforcement
+   Each attack is a subcommand:
+   ```bash
+   sudo ./ironattack syn-flood --target 10.0.1.1 --port 7 --rate 1000
+   sudo ./ironattack arp-spoof --target 10.0.1.1 --impersonate 10.0.1.254
+   sudo ./ironattack vlan-hop --target-vlan 20 --iface iron0
+   sudo ./ironattack ip-spoof --src 10.0.99.1 --dst 10.0.1.1 --port 7
+   sudo ./ironattack rst-inject --target 10.0.1.1 --port 7
+   sudo ./ironattack icmp-redirect --target 10.0.1.1 --new-gw 10.0.1.99
+   sudo ./ironattack slowloris --target 10.0.1.1 --port 8080 --conns 200
+   sudo ./ironattack frag-attack --target 10.0.1.1 --overlap
+   ```
 
-3. **Penetration testing workflow**
-   - Reconnaissance: ironprobe scans to discover services and ACL gaps
-   - Enumeration: identify open ports, protocol versions, OS fingerprints
-   - Exploitation: use ironattack to test specific vulnerabilities
-   - Post-exploitation: verify what access was gained, lateral movement
-   - Reporting: automated test results with pass/fail per defense
+   Attacks implemented:
+   - **SYN flood**: send thousands of SYNs from random source IPs to exhaust connection table
+   - **ARP spoofing**: inject fake ARP replies to poison the router's ARP table
+   - **VLAN hopping**: craft double-tagged 802.1Q frames to escape VLAN isolation
+   - **IP spoofing**: forge source IP to bypass source-based ACLs
+   - **TCP RST injection**: send forged RST to tear down established connections
+   - **ICMP redirect**: send fake ICMP redirect to manipulate routing
+   - **Slowloris**: open many connections, send data slowly to exhaust resources
+   - **Fragmentation attacks**: overlapping fragments, tiny fragments
 
-4. **Attack-defense matrix**
-   - Map each attack to its corresponding defense
-   - Measure: does the defense detect? mitigate? log?
-   - Study: what happens when defense is misconfigured?
+2. **Defense mechanisms — irondefense (built into ironstack)**
 
-5. **Validation**
+   Defenses are enabled/disabled via CLI:
+   ```
+   ironctl> defense syn-cookies enable
+   ironctl> defense rate-limit 100/s per-source
+   ironctl> defense arp-inspection enable
+   ironctl> defense vlan-strict enable
+   ```
+
+   Defenses implemented:
+   - **SYN cookies**: stateless SYN handling under flood (no connection table entry until ACK)
+   - **Rate limiting**: per-source connection rate caps (drop excess SYNs)
+   - **Connection tracking**: stateful inspection (already in Phase 8d)
+   - **Anomaly detection**: flag unusual patterns (invalid flags, unusual sizes)
+   - **Blackhole routing**: drop traffic to known-bad destinations
+   - **ARP inspection**: validate ARP against known IP-MAC bindings
+   - **VLAN strict mode**: reject double-tagged frames on access ports
+
+3. **External scanner — ironprobe-ext (separate binary)**
+
+   Real network scanning (sends actual SYN packets):
+   ```bash
+   sudo ./ironprobe-ext --target 10.0.1.1 --ports 1-65535 --iface iron0
+   sudo ./ironprobe-ext --target 10.0.1.1 --udp --ports 53,67,123
+   ```
+
+4. **Penetration testing workflow**
+   - **Reconnaissance**: `ironprobe-ext` scans to discover services and ACL gaps
+   - **Enumeration**: identify open ports, protocol versions, service fingerprints
+   - **Exploitation**: `ironattack` tests specific vulnerabilities
+   - **Post-exploitation**: verify what access was gained, lateral movement
+   - **Reporting**: automated test results with pass/fail per defense
+
+5. **Attack-defense matrix**
+
+   | Attack | Defense | Metric |
+   |--------|---------|--------|
+   | SYN flood | SYN cookies + rate limit | Connection table usage under attack |
+   | ARP spoofing | ARP inspection | Poisoned entries detected/blocked |
+   | VLAN hopping | VLAN strict mode | Double-tagged frames dropped |
+   | IP spoofing | Source IP validation (uRPF) | Spoofed packets dropped |
+   | TCP RST injection | Connection tracking | Forged RSTs rejected |
+   | ICMP redirect | ICMP redirect disable | Routing table unchanged |
+   | Slowloris | Connection timeout + rate limit | Resources recovered |
+   | Fragmentation | Fragment validation | Overlapping/tiny frags dropped |
+
+6. **Validation**
    - SYN flood with/without SYN cookies: measure connection table behavior
    - VLAN hopping attempt with/without strict trunk mode
    - ARP spoofing with/without ARP inspection
    - TCP RST injection with/without connection tracking
    - Full penetration test report generated automatically
+   - Each attack/defense pair tested independently
+
+### Summarization
+
+1. Key difference table — Phase 12 (internal, generic) vs Phase 13 (external, specific attacks, real packets)
+2. Architecture diagram — 3 terminals: router, attacker, monitor
+3. External attack tools (ironattack separate binary) with 8 subcommands:
+   * syn-flood, arp-spoof, vlan-hop, ip-spoof, rst-inject, icmp-redirect, slowloris, frag-attack
+4. Defense mechanisms (irondefense built into ironstack) with CLI commands:
+   * defense syn-cookies enable, defense rate-limit 100/s, defense arp-inspection enable, etc.
+5. External scanner (ironprobe-ext separate binary) — real SYN packets via TAP
+6. Attack-defense matrix — maps each attack to its defense with measurable metrics
+7. Penetration testing workflow — reconnaissance → enumeration → exploitation → post-exploitation → reporting
 
 ---
 
@@ -1114,9 +1201,9 @@ Dynamic routing protocols (OSPF, BGP) are **out of scope** for IronNet. The proj
 | 10 | ironmon (telemetry) | Week 23–24 |
 | 11 | ironapps (socket API + target apps) | Week 25–28 |
 | 12 | ironfuzz / ironprobe / ironload | Week 29–34 |
-| 13 | Attack Simulation & Defense | Week 33–36 |
-| 14 | ironsim (emulator) | Week 37–38 |
-| 15 | irontrace (capture/replay) | Week 39–40 |
+| 13 | Attack Simulation & Defense | Week 35–40 |
+| 14 | ironsim (emulator) | Week 41–42 |
+| 15 | irontrace (capture/replay) | Week 43–44 |
 
 **Total estimated duration: ~10 months (part-time development)**
 

@@ -508,6 +508,34 @@ ironctl> audit enable
 [INFO ] [AUDIT] Audit logging enabled
 ```
 
+### Network Scanner (ironprobe)
+
+```
+ironctl> scan 10.0.1.1 1 10000
+=== Scan Results for 10.0.1.1 ===
+  Open: 5  Filtered: 1  Closed: 9994
+
+  7      OPEN       echo
+  22     FILTERED
+  53     OPEN       dns
+  6379   OPEN       kv-store
+  8080   OPEN       http
+  9000   OPEN       rpc
+
+ironctl> scan 10.0.1.3 1 100
+=== Scan Results for 10.0.1.3 ===
+  Open: 0  Filtered: 0  Closed: 100
+
+ironctl> ping 10.0.1.1
+10.0.1.1 is ALIVE
+
+ironctl> ping 10.0.1.3
+10.0.1.3 is UNREACHABLE
+
+ironctl> acl-check 10.0.1.1
+ACL validation: 0 mismatches
+```
+
 ### Audit log file
 
 Events are also written to `/tmp/ironnet_audit.log` in structured format:

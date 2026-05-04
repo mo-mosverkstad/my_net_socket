@@ -91,6 +91,9 @@ acl delete <rule_id>
 arp add <ip> <mac>
 audit enable            - Enable audit logging
 audit disable           - Disable audit logging
+scan <ip> [start] [end] - Scan ports on target
+ping <ip>               - Check if target is alive
+acl-check <ip>          - Validate ACL enforcement
 exit                    - Stop the router
 ```
 
@@ -244,6 +247,7 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | libiron_cli.a | `build/ironctl/libiron_cli.a` | Library | Embedded CLI library |
 | libiron_mon.a | `build/ironmon/libiron_mon.a` | Library | Telemetry & audit library |
 | libiron_apps.a | `build/ironapps/libiron_apps.a` | Library | Application servers (echo, DNS, KV, HTTP, RPC) |
+| libiron_probe.a | `build/ironprobe/libiron_probe.a` | Library | Network scanner |
 
 ---
 

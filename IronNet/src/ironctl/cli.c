@@ -15,6 +15,7 @@
 #include "../ironstack/security/ipsec.h"
 #include "../ironmon/audit.h"
 #include "../ironmon/stats_json.h"
+#include "../ironprobe/probe.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -66,6 +67,9 @@ static void cmd_help(void) {
     printf("  arp add <ip> <mac>\n");
     printf("  audit enable            - Enable audit logging\n");
     printf("  audit disable           - Disable audit logging\n");
+    printf("  scan <ip> [start] [end] - Scan ports on target\n");
+    printf("  ping <ip>               - Check if target is alive\n");
+    printf("  acl-check <ip>          - Validate ACL enforcement\n");
     printf("  help                    - Show this help\n");
     printf("  exit                    - Stop the router\n");
 }
@@ -255,6 +259,40 @@ int cli_execute(const char *line) {
         cmd_acl(argc, argv);
     } else if (strcmp(argv[0], "arp") == 0) {
         cmd_arp_cli(argc, argv);
+    } else if (strcmp(argv[0], "scan") == 0) {
+        /* scan <ip> [port_start] [port_end] */
+        if (argc < 2) {
+            printf("Usage: scan <target_ip> [port_start] [port_end]\n");
+        } else {
+            uint32_t target = iron_str_to_ip(argv[1]);
+            uint16_t pstart = (argc >= 3) ? (uint16_t)atoi(argv[2]) : 1;
+            uint16_t pend = (argc >= 4) ? (uint16_t)atoi(argv[3]) : 100;
+            probe_scan_result_t result;
+            probe_tcp_scan(target, pstart, pend, &result);
+            probe_print_result(&result);
+        }
+    } else if (strcmp(argv[0], "ping") == 0) {
+        if (argc < 2) {
+            printf("Usage: ping <target_ip>\n");
+        } else {
+            uint32_t target = iron_str_to_ip(argv[1]);
+            int rc = probe_icmp_ping(target);
+            char ip_buf[16];
+            printf("%s is %s\n", iron_ip_to_str(target, ip_buf, sizeof(ip_buf)),
+                   rc == 0 ? "ALIVE" : "UNREACHABLE");
+        }
+    } else if (strcmp(argv[0], "acl-check") == 0) {
+        /* acl-check <ip> */
+        if (argc < 2) {
+            printf("Usage: acl-check <target_ip>\n");
+        } else {
+            uint32_t target = iron_str_to_ip(argv[1]);
+            uint16_t expect_open[] = {7, 53, 6379, 8080, 9000};
+            uint16_t expect_filtered[] = {22};
+            int mismatches;
+            probe_acl_validate(target, expect_open, 5, expect_filtered, 1, &mismatches);
+            printf("ACL validation: %d mismatches\n", mismatches);
+        }
     } else if (strcmp(argv[0], "audit") == 0) {
         if (argc >= 2 && strcmp(argv[1], "enable") == 0) {
             audit_enable();
