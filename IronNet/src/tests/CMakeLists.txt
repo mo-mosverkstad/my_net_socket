@@ -24,10 +24,11 @@ target_include_directories(test_acl PRIVATE
 )
 target_link_libraries(test_acl iron_common)
 
-add_executable(test_tcp unit/test_tcp.c)
+add_executable(test_tcp unit/test_tcp.c stubs/app_stub.c stubs/ip_output_stub.c)
 target_include_directories(test_tcp PRIVATE
     ${CMAKE_SOURCE_DIR}/common
     ${CMAKE_SOURCE_DIR}/ironstack
+    ${CMAKE_SOURCE_DIR}
 )
 target_link_libraries(test_tcp iron_common)
 
@@ -103,7 +104,7 @@ target_include_directories(test_l2_module PRIVATE
 )
 target_link_libraries(test_l2_module iron_common)
 
-add_executable(test_l3_module module/test_l3_module.c stubs/audit_stub.c)
+add_executable(test_l3_module module/test_l3_module.c stubs/audit_stub.c stubs/app_stub.c)
 target_include_directories(test_l3_module PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/module
     ${CMAKE_SOURCE_DIR}/common
@@ -112,7 +113,7 @@ target_include_directories(test_l3_module PRIVATE
 )
 target_link_libraries(test_l3_module iron_common)
 
-add_executable(test_pbr_acl_module module/test_pbr_acl_module.c stubs/audit_stub.c)
+add_executable(test_pbr_acl_module module/test_pbr_acl_module.c stubs/audit_stub.c stubs/app_stub.c)
 target_include_directories(test_pbr_acl_module PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/module
     ${CMAKE_SOURCE_DIR}/common
@@ -121,11 +122,12 @@ target_include_directories(test_pbr_acl_module PRIVATE
 )
 target_link_libraries(test_pbr_acl_module iron_common)
 
-add_executable(test_l4_module module/test_l4_module.c)
+add_executable(test_l4_module module/test_l4_module.c stubs/app_stub.c stubs/ip_output_stub.c)
 target_include_directories(test_l4_module PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/module
     ${CMAKE_SOURCE_DIR}/common
     ${CMAKE_SOURCE_DIR}/ironstack
+    ${CMAKE_SOURCE_DIR}
 )
 target_link_libraries(test_l4_module iron_common)
 

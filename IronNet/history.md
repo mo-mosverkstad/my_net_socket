@@ -2287,3 +2287,95 @@ After Phase 10:
 - **14 unit tests + 10 module tests = 24 tests, all passing**
 - Audit logging tested interactively via daemon (see DEMO.md)
 - Audit file output verified at `/tmp/ironnet_audit.log`
+
+---
+
+## Phase 11a: Socket API + TCP Output
+
+### What was done
+
+We created the application-facing socket API that allows applications to register on ports, receive data, and send responses. We also extended TCP to generate response packets (SYN+ACK, ACK, data segments, FIN) and extended UDP to dispatch received data to registered applications.
+
+### The key problem solved
+
+Before this phase, ironstack could only **receive** packets — it had no way to **send** TCP/UDP responses. The TCP state machine tracked state but never generated outbound segments. This meant:
+- `nc 10.0.1.1 80` would hang (SYN received but no SYN+ACK sent back)
+- No application could ever respond to a client
+
+After this phase:
+- TCP sends SYN+ACK when SYN arrives on a listening port
+- TCP sends ACK when data is received
+- Applications can send data back via `app_socket_send()`
+- Applications can close connections via `app_socket_close_conn()`
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironapps/app_socket.h` | Socket API: listen, send, close, find_listener |
+| `ironapps/app_socket.c` | Listener registry, TCP/UDP output, dispatch |
+| `ironapps/CMakeLists.txt` | Builds iron_apps as static library |
+| `tests/stubs/app_stub.c` | Stub for tests that include tcp.c/udp.c |
+| `tests/stubs/ip_output_stub.c` | Stub ip_output for test_tcp and test_l4_module |
+
+### Application socket API
+
+```c
+// Register app on a port
+int app_socket_listen(protocol, port, on_data_cb, on_accept_cb, on_close_cb);
+
+// Send data to a connected peer
+int app_socket_send(dst_ip, dst_port, src_ip, src_port, protocol, data, len);
+
+// Close a TCP connection (sends FIN)
+int app_socket_close_conn(dst_ip, dst_port, src_ip, src_port);
+
+// Find registered listener (used internally by TCP/UDP)
+app_listener_t *app_find_listener(protocol, port);
+```
+
+### TCP output (new capability)
+
+TCP now generates these packets:
+- **SYN+ACK** — when SYN arrives on a port with a registered listener
+- **ACK** — when data is received (acknowledges receipt)
+- **Data segments** — when app calls `app_socket_send()` (ACK+PSH flags)
+- **FIN** — when app calls `app_socket_close_conn()`
+
+All outbound TCP segments are sent via `ip_output()` → routing → L2 → TAP.
+
+### UDP output (new capability)
+
+`app_socket_send()` with PROTO_UDP builds a UDP packet (header + payload) and sends via `ip_output()`.
+
+### Application dispatch
+
+When TCP/UDP receives data:
+1. `app_find_listener(protocol, dst_port)` checks the registry
+2. If found, calls `listener->on_data(sock_id, src_ip, src_port, data, len)`
+3. If not found, packet is silently consumed (no app listening)
+
+TCP also calls:
+- `listener->on_accept()` when connection reaches ESTABLISHED
+- (Future: `listener->on_close()` when connection closes)
+
+### Integration
+
+- `pipeline.c` calls `app_socket_init()` at startup
+- `tcp.c` includes `app_socket.h` and calls `app_find_listener()` + `tcp_send_segment()`
+- `udp.c` includes `app_socket.h` and calls `app_find_listener()`
+- ironstack links against `libiron_apps.a`
+
+### Test stub pattern
+
+Tests that include `tcp.c` or `udp.c` directly now need stubs for:
+- `app_find_listener()` — returns NULL (no app registered in tests)
+- `ip_output()` — no-op (test_tcp and test_l4_module don't have the full IP stack)
+
+These are provided by `tests/stubs/app_stub.c` and `tests/stubs/ip_output_stub.c`.
+
+### Current test summary
+
+After Phase 11a:
+- **14 unit tests + 10 module tests = 24 tests, all passing**
+- Socket API tested interactively via daemon with registered apps (Phase 11b)

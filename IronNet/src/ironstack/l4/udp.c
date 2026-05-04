@@ -2,6 +2,7 @@
 #include "log.h"
 #include "stats.h"
 #include "utils.h"
+#include "../ironapps/app_socket.h"
 
 #include <string.h>
 
@@ -34,7 +35,11 @@ int udp_input(uint32_t src_ip, uint32_t dst_ip,
             iron_ip_to_str(dst_ip, dst_buf, sizeof(dst_buf)), dport,
             payload_len);
 
-    /* Application dispatch will be added in Phase 9 (ironapps) */
+    /* Dispatch to registered app */
+    app_listener_t *listener = app_find_listener(PROTO_UDP, dport);
+    if (listener && listener->on_data) {
+        listener->on_data(0, src_ip, sport, data + UDP_HEADER_LEN, payload_len);
+    }
 
     return 0;
 }

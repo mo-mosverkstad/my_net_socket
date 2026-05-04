@@ -2,6 +2,8 @@
 #include "log.h"
 #include "stats.h"
 #include "utils.h"
+#include "../ironapps/app_socket.h"
+#include "../l3/ip.h"
 
 #include <string.h>
 #include <time.h>
@@ -84,6 +86,25 @@ static const char *tcp_state_name(tcp_state_t state) {
     }
 }
 
+static int tcp_send_segment(uint32_t src_ip, uint32_t dst_ip,
+                            uint16_t src_port, uint16_t dst_port,
+                            uint32_t seq, uint32_t ack_num, uint8_t flags) {
+    uint8_t seg[TCP_HEADER_MIN_LEN];
+    memset(seg, 0, TCP_HEADER_MIN_LEN);
+    seg[0] = (src_port >> 8) & 0xFF;
+    seg[1] = src_port & 0xFF;
+    seg[2] = (dst_port >> 8) & 0xFF;
+    seg[3] = dst_port & 0xFF;
+    uint32_t seq_n = iron_htonl(seq);
+    memcpy(seg + 4, &seq_n, 4);
+    uint32_t ack_n = iron_htonl(ack_num);
+    memcpy(seg + 8, &ack_n, 4);
+    seg[12] = (5 << 4); /* data offset = 20 bytes */
+    seg[13] = flags;
+    seg[14] = 0xFF; seg[15] = 0xFF; /* window = 65535 */
+    return ip_output(src_ip, dst_ip, PROTO_TCP, seg, TCP_HEADER_MIN_LEN);
+}
+
 int tcp_input(uint32_t src_ip, uint32_t dst_ip,
               uint8_t *data, int len, int iface_idx) {
     (void)iface_idx;
@@ -138,6 +159,15 @@ int tcp_input(uint32_t src_ip, uint32_t dst_ip,
         iron_stats_increment(STAT_TCP_CONN_CREATED);
         iron_stats_increment(STAT_TCP_HALF_OPEN);
         LOG_DBG(MODULE, "New connection: SYN_RECV (port %u -> %u)", sport, dport);
+
+        /* If an app is listening on this port, send SYN+ACK */
+        app_listener_t *listener = app_find_listener(PROTO_TCP, dport);
+        if (listener) {
+            tcp_send_segment(dst_ip, src_ip, dport, sport,
+                             conn->snd_nxt, conn->rcv_nxt,
+                             TCP_FLAG_SYN | TCP_FLAG_ACK);
+            conn->snd_nxt++;
+        }
         return 0;
     }
 
@@ -156,6 +186,12 @@ int tcp_input(uint32_t src_ip, uint32_t dst_ip,
             conn->rcv_nxt = seq;
             iron_stats_decrement(STAT_TCP_HALF_OPEN);
             LOG_DBG(MODULE, "Connection ESTABLISHED (port %u -> %u)", sport, dport);
+
+            /* Notify app */
+            app_listener_t *listener = app_find_listener(PROTO_TCP, dport);
+            if (listener && listener->on_accept) {
+                listener->on_accept(0, src_ip, sport);
+            }
         }
         break;
 
@@ -165,11 +201,22 @@ int tcp_input(uint32_t src_ip, uint32_t dst_ip,
             conn->rcv_nxt = seq + 1;
             LOG_DBG(MODULE, "FIN received, FIN_WAIT_1");
         } else {
-            /* Data transfer: advance rcv_nxt */
-            int hdr_len = tcp_get_header_len(hdr);
-            int payload_len = len - hdr_len;
-            if (payload_len > 0) {
-                conn->rcv_nxt = seq + payload_len;
+            /* Data transfer: advance rcv_nxt and deliver to app */
+            int hdr_len_tcp = tcp_get_header_len(hdr);
+            int payload_len_tcp = len - hdr_len_tcp;
+            if (payload_len_tcp > 0) {
+                conn->rcv_nxt = seq + payload_len_tcp;
+
+                /* Send ACK */
+                tcp_send_segment(dst_ip, src_ip, dport, sport,
+                                 conn->snd_nxt, conn->rcv_nxt, TCP_FLAG_ACK);
+
+                /* Deliver to app */
+                app_listener_t *listener = app_find_listener(PROTO_TCP, dport);
+                if (listener && listener->on_data) {
+                    listener->on_data(0, src_ip, sport,
+                                      data + hdr_len_tcp, payload_len_tcp);
+                }
             }
         }
         break;

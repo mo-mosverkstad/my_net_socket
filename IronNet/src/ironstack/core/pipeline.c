@@ -12,6 +12,7 @@
 #include "../l3/ip_frag.h"
 #include "../l4/tcp.h"
 #include "../ironmon/audit.h"
+#include "../ironapps/app_socket.h"
 
 #include <unistd.h>
 
@@ -34,6 +35,7 @@ int iron_pipeline_init(void) {
     if (pbr_init() != 0) return -1;
     if (tcp_init() != 0) return -1;
     audit_init(AUDIT_DEFAULT_FILE);
+    app_socket_init();
 
     /* Load config file if specified */
     if (g_conf_file) {

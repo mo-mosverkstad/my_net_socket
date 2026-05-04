@@ -452,6 +452,8 @@ Key module tests with visible output:
 - `./tests/test_nat_module` — SNAT/DNAT translation and return-path
 - `./tests/test_conntrack_module` and `test_nat_module` also validate audit integration indirectly
 
+After Phase 11a, the router can complete TCP handshakes with clients. Register an app on a port and `nc` will get a SYN+ACK response. See Phase 11b for echo/DNS server implementations.
+
 To run all tests:
 ```bash
 cd IronNet/build
