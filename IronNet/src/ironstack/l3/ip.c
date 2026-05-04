@@ -3,8 +3,11 @@
 #include "acl.h"
 #include "pbr.h"
 #include "icmp.h"
+#include "ip_frag.h"
 #include "../l4/udp.h"
 #include "../l4/tcp.h"
+#include "../core/iface.h"
+#include "../l2/arp.h"
 #include "log.h"
 #include "stats.h"
 #include "utils.h"
@@ -14,24 +17,6 @@
 #include <string.h>
 
 #define MODULE "IP"
-
-/* Local IP addresses (simplified: one per interface) */
-#define MAX_LOCAL_IPS 8
-static uint32_t g_local_ips[MAX_LOCAL_IPS];
-static int g_local_ip_count = 0;
-
-int ip_add_local_addr(uint32_t ip) {
-    if (g_local_ip_count >= MAX_LOCAL_IPS) return -1;
-    g_local_ips[g_local_ip_count++] = ip;
-    return 0;
-}
-
-static bool ip_is_local(uint32_t ip) {
-    for (int i = 0; i < g_local_ip_count; i++) {
-        if (g_local_ips[i] == ip) return true;
-    }
-    return false;
-}
 
 int ip_input(uint8_t *data, int len, int iface_idx) {
     iron_stats_increment(STAT_L3_RX_PACKETS);
@@ -76,8 +61,22 @@ int ip_input(uint8_t *data, int len, int iface_idx) {
     uint8_t *payload = data + hdr_len;
     int payload_len = iron_ntohs(hdr->total_len) - hdr_len;
 
+    /* Extract ports for ACL (needed for both local and forward paths) */
+    uint16_t sport = 0, dport = 0;
+    if ((hdr->protocol == PROTO_TCP || hdr->protocol == PROTO_UDP) && payload_len >= 4) {
+        sport = (payload[0] << 8) | payload[1];
+        dport = (payload[2] << 8) | payload[3];
+    }
+
+    /* ACL check (applied to ALL traffic — local and forwarded) */
+    acl_action_t acl_result = acl_evaluate(hdr->src_ip, hdr->dst_ip,
+                                           hdr->protocol, sport, dport);
+    if (acl_result == ACL_DENY) {
+        return -1;
+    }
+
     /* Local delivery? */
-    if (ip_is_local(hdr->dst_ip)) {
+    if (iface_is_local_ip(hdr->dst_ip)) {
         iron_stats_increment(STAT_L3_LOCAL_DELIVER);
 
         switch (hdr->protocol) {
@@ -106,13 +105,6 @@ int ip_input(uint8_t *data, int len, int iface_idx) {
     hdr->checksum = 0;
     hdr->checksum = iron_checksum(data, hdr_len);
 
-    /* Extract ports for ACL */
-    uint16_t sport = 0, dport = 0;
-    if ((hdr->protocol == PROTO_TCP || hdr->protocol == PROTO_UDP) && payload_len >= 4) {
-        sport = (payload[0] << 8) | payload[1];
-        dport = (payload[2] << 8) | payload[3];
-    }
-
     /* Step 1: PBR lookup (highest priority) */
     pkt_context_t ctx;
     pkt_context_init(&ctx);
@@ -130,7 +122,7 @@ int ip_input(uint8_t *data, int len, int iface_idx) {
     }
 
     if (pbr_rc != 0) {
-        /* Step 3: No PBR match, fall through to FIB (static routing) */
+        /* No PBR match, fall through to FIB (static routing) */
         if (route_lookup(hdr->dst_ip, &next_hop, &out_iface) != 0) {
             LOG_DBG(MODULE, "No route to host");
             iron_stats_increment(STAT_L3_DROPS_NO_ROUTE);
@@ -138,25 +130,23 @@ int ip_input(uint8_t *data, int len, int iface_idx) {
         }
     }
 
-    /* Step 2: ACL check (applied on the output path after routing decision) */
-    acl_action_t acl_result = acl_evaluate(hdr->src_ip, hdr->dst_ip,
-                                           hdr->protocol, sport, dport);
-    if (acl_result == ACL_DENY) {
-        return -1;
-    }
-
-    /* Forward via L2 */
+    /* Forward via L2 — resolve MAC via ARP */
     vnic_t *out = vnic_get(out_iface);
     if (!out) {
         iron_stats_increment(STAT_L3_DROPS_NO_ROUTE);
         return -1;
     }
 
+    uint8_t dst_mac[6];
+    if (arp_resolve(next_hop ? next_hop : hdr->dst_ip, out_iface, dst_mac) != 0) {
+        /* ARP not resolved yet — use broadcast as fallback */
+        memset(dst_mac, 0xFF, 6);
+    }
+
     uint8_t frame_buf[ETH_MAX_FRAME];
-    uint8_t bcast_mac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     int total_ip_len = iron_ntohs(hdr->total_len);
 
-    int frame_len = eth_build(bcast_mac, out->mac, ETHERTYPE_IPV4,
+    int frame_len = eth_build(dst_mac, out->mac, ETHERTYPE_IPV4,
                               data, total_ip_len, frame_buf, sizeof(frame_buf));
     if (frame_len < 0) return -1;
 

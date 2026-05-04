@@ -28,6 +28,18 @@ int vnic_inject(int i, const uint8_t *b, int l) { return vnic_write(i, b, l); }
 int vnic_get_count(void) { return 1; }
 vnic_t *vnic_get(int i) { (void)i; memcpy(g_fake_vnic.mac, g_fake_mac, 6); return &g_fake_vnic; }
 
+/* Stubs for iface and ARP */
+#include "../ironstack/core/iface.h"
+bool iface_is_local_ip(uint32_t ip) { (void)ip; return false; }
+iface_config_t *iface_get(int idx) { (void)idx; return NULL; }
+int arp_init(void) { return 0; }
+int arp_input(uint8_t *d, int l, int i) { (void)d; (void)l; (void)i; return 0; }
+int arp_resolve(uint32_t ip, int iface_idx, uint8_t *mac_out) {
+    (void)ip; (void)iface_idx;
+    memset(mac_out, 0xFF, 6);
+    return 0;
+}
+
 #include "../ironstack/l2/eth.h"
 #include "../ironstack/l2/eth.c"
 #include "../ironstack/l3/route.h"

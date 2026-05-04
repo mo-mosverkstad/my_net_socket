@@ -54,14 +54,31 @@ make
 
 ## Run
 
-### Start the ironstack daemon
+### Start the ironstack daemon (no config)
 
 ```bash
 cd IronNet/build
 ./ironstack/ironstack
 ```
 
+### Start as virtual router (with config file)
+
+```bash
+cd IronNet/build
+sudo ./ironstack/ironstack ../src/configs/router.conf
+```
+
+### Enable debug logging
+
+```bash
+sudo ./ironstack/ironstack -d ../src/configs/router.conf
+```
+
+The `-d` flag shows all packet processing (ARP, IP, ACL, ICMP) at DEBUG level.
+
 Press `Ctrl+C` to stop. On shutdown it prints collected statistics.
+
+See `DEMO.md` for a full walkthrough with two terminals.
 
 ---
 

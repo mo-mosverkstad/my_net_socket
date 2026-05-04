@@ -10,6 +10,12 @@ int ip_input(uint8_t *data, int len, int iface_idx) {
     return 0;
 }
 
+/* Stub arp_input for module test */
+int arp_input(uint8_t *data, int len, int iface_idx) {
+    (void)data; (void)len; (void)iface_idx;
+    return 0;
+}
+
 #include "l2/eth.h"
 #include "l2/eth.c"
 

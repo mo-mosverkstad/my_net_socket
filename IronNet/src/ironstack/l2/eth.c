@@ -1,4 +1,5 @@
 #include "eth.h"
+#include "arp.h"
 #include "log.h"
 #include "stats.h"
 #include "utils.h"
@@ -55,7 +56,8 @@ void eth_dispatch(eth_frame_t *frame) {
         ip_input(frame->payload, frame->payload_len, frame->iface_idx);
         break;
     case ETHERTYPE_ARP:
-        LOG_DBG(MODULE, "ARP frame received (not implemented)");
+        LOG_DBG(MODULE, "ARP frame received (%d bytes)", frame->payload_len);
+        arp_input(frame->payload, frame->payload_len, frame->iface_idx);
         break;
     default:
         iron_stats_increment(STAT_L2_RX_DROPS);

@@ -1,11 +1,15 @@
 #include "pipeline.h"
+#include "iface.h"
+#include "router_conf.h"
 #include "log.h"
 #include "stats.h"
 #include "../io/vnic.h"
 #include "../l2/eth.h"
+#include "../l2/arp.h"
 #include "../l3/route.h"
 #include "../l3/acl.h"
 #include "../l3/pbr.h"
+#include "../l3/ip_frag.h"
 #include "../l4/tcp.h"
 
 #include <unistd.h>
@@ -14,13 +18,26 @@
 #define RX_BUF_SIZE 2048
 
 static uint8_t rx_buf[RX_BUF_SIZE];
+static const char *g_conf_file = NULL;
+
+void iron_pipeline_set_config(const char *conf_file) {
+    g_conf_file = conf_file;
+}
 
 int iron_pipeline_init(void) {
     if (vnic_init() != 0) return -1;
+    if (iface_init() != 0) return -1;
+    if (arp_init() != 0) return -1;
     if (route_init() != 0) return -1;
     if (acl_init(ACL_DEFAULT_PERMIT) != 0) return -1;
     if (pbr_init() != 0) return -1;
     if (tcp_init() != 0) return -1;
+
+    /* Load config file if specified */
+    if (g_conf_file) {
+        router_conf_load(g_conf_file);
+    }
+
     LOG_INF(MODULE, "Pipeline initialized");
     return 0;
 }

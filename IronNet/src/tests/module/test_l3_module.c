@@ -28,6 +28,30 @@ int vnic_inject(int i, const uint8_t *b, int l) { return vnic_write(i, b, l); }
 int vnic_get_count(void) { return 1; }
 vnic_t *vnic_get(int i) { (void)i; memcpy(g_fake_vnic.mac, g_fake_mac, 6); return &g_fake_vnic; }
 
+/* Stubs for iface and ARP */
+#include "../ironstack/core/iface.h"
+static uint32_t g_local_ips[8];
+static int g_local_ip_count = 0;
+
+int iface_init(void) { return 0; }
+bool iface_is_local_ip(uint32_t ip) {
+    for (int i = 0; i < g_local_ip_count; i++)
+        if (g_local_ips[i] == ip) return true;
+    return false;
+}
+iface_config_t *iface_get(int idx) { (void)idx; return NULL; }
+static void test_add_local_ip(uint32_t ip) {
+    if (g_local_ip_count < 8) g_local_ips[g_local_ip_count++] = ip;
+}
+
+int arp_init(void) { return 0; }
+int arp_input(uint8_t *d, int l, int i) { (void)d; (void)l; (void)i; return 0; }
+int arp_resolve(uint32_t ip, int iface_idx, uint8_t *mac_out) {
+    (void)ip; (void)iface_idx;
+    memset(mac_out, 0xFF, 6); /* broadcast fallback */
+    return 0;
+}
+
 #include "../ironstack/l2/eth.h"
 #include "../ironstack/l2/eth.c"
 #include "../ironstack/l3/route.h"
@@ -137,7 +161,7 @@ static mt_result_t test_ip_icmp_echo(void) {
     pbr_init();
 
     /* Add local address and route for reply */
-    ip_add_local_addr(iron_str_to_ip("10.0.1.1"));
+    test_add_local_ip(iron_str_to_ip("10.0.1.1"));
     route_add((ip_prefix_t){iron_str_to_ip("10.0.2.0"), 24}, iron_str_to_ip("10.0.2.254"), 0);
 
     /* Build ICMP echo request */

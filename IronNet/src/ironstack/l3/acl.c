@@ -81,7 +81,12 @@ acl_action_t acl_evaluate(uint32_t src_ip, uint32_t dst_ip,
 
             if (g_acl_rules[i].action == ACL_DENY) {
                 iron_stats_increment(STAT_L3_DROPS_ACL);
-                LOG_DBG(MODULE, "Packet denied by rule %u", g_acl_rules[i].rule_id);
+                char src_buf[16], dst_buf[16];
+                LOG_INF(MODULE, "DENY rule %u: %s -> %s proto=%d sport=%d dport=%d",
+                        g_acl_rules[i].rule_id,
+                        iron_ip_to_str(src_ip, src_buf, sizeof(src_buf)),
+                        iron_ip_to_str(dst_ip, dst_buf, sizeof(dst_buf)),
+                        protocol, src_port, dst_port);
             }
             return g_acl_rules[i].action;
         }

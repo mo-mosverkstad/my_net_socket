@@ -1345,3 +1345,175 @@ ctest --output-on-failure
 # All module tests via script
 ../src/tests/run_module_tests.sh .
 ```
+
+---
+
+## Phase 7: Virtual Router
+
+### What was done
+
+We wired all data plane modules (L2, L3, ACL, PBR, TCP, UDP, IPsec) into a working virtual router that:
+- Creates real TAP interfaces on WSL
+- Reads a config file at startup (interfaces, routes, ACLs)
+- Routes packets between interfaces end-to-end
+- Responds to ICMP ping
+- Enforces ACL rules on all traffic (local and forwarded)
+- Resolves next-hop MAC addresses via ARP
+- Supports IP fragmentation and reassembly
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironstack/core/iface.h` | Interface config model (name, MAC, IP/prefix, link state) |
+| `ironstack/core/iface.c` | Per-interface IP binding, replaces global `ip_add_local_addr()` |
+| `ironstack/l2/arp.h` | ARP table, request/reply, resolution API |
+| `ironstack/l2/arp.c` | ARP handling: learn, resolve, request/reply, timeout |
+| `ironstack/l3/ip_frag.h` | IP fragmentation and reassembly API |
+| `ironstack/l3/ip_frag.c` | Fragment/reassemble with security checks |
+| `ironstack/core/router_conf.h` | Config file parser API |
+| `ironstack/core/router_conf.c` | Parses `router.conf` (interfaces, routes, ACLs) |
+| `src/configs/router.conf` | Sample config file for two-interface router |
+| `DEMO.md` | Full demo guide with two terminals |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironstack/main.c` | Added `-d` flag for debug logging, config file argument |
+| `ironstack/core/pipeline.c` | Integrates iface, ARP, route, ACL, PBR, TCP init + config loading |
+| `ironstack/core/pipeline.h` | Added `iron_pipeline_set_config()` |
+| `ironstack/l2/eth.c` | Connected ARP dispatch (`arp_input()` called on EtherType 0x0806) |
+| `ironstack/l3/ip.c` | Uses `iface_is_local_ip()`, `arp_resolve()`, ACL before local delivery |
+| `ironstack/l3/acl.c` | ACL DENY messages now visible at INFO level (always printed) |
+
+### Key design decisions
+
+**1. ACL applies to ALL traffic (local + forwarded)**
+
+Initially, ACL was only checked on the forwarding path. This meant traffic destined to the router's own IPs (local delivery) bypassed ACL entirely. This was a bug — `nc -zv 10.0.1.1 22` would reach the TCP state machine even though ACL rule 3 says DENY port 22.
+
+Fixed by moving ACL check before the local/forward decision:
+```
+ip_input() → validate → ACL check → local delivery / forward path
+```
+
+Now the pipeline is:
+```
+IP Validation → ACL (all traffic) → Local? → L4 dispatch
+                                   → Forward? → PBR → FIB → ARP → L2 TX
+```
+
+**2. ARP replaces broadcast MAC hack**
+
+Previously, forwarded packets used broadcast MAC (FF:FF:FF:FF:FF:FF) as destination. Now `arp_resolve()` is called to find the real MAC. If not in the ARP table, an ARP request is sent and broadcast is used as fallback until the reply arrives.
+
+**3. Interface-to-IP binding**
+
+The old `ip_add_local_addr()` was a flat global list. Now each interface has its own IP/prefix via `iface_config_t`. The function `iface_is_local_ip()` checks all configured interfaces.
+
+**4. Config file parser**
+
+Simple line-based format:
+```
+interface iron0 mac 02:00:00:00:00:01 ip 10.0.1.1/24
+route 10.0.1.0/24 dev iron0
+route 0.0.0.0/0 via 10.0.1.254 dev iron0
+acl permit tcp any any port 80
+acl deny tcp any any port 22
+```
+
+Parsed at startup before the main loop begins.
+
+### ARP implementation details
+
+**ARP table:**
+- Up to 128 entries
+- Each entry: IP → MAC mapping with timestamp
+- Entries expire after 300 seconds (5 minutes)
+- When table is full, oldest entry is overwritten
+
+**ARP request/reply flow:**
+1. Packet needs to be forwarded to next-hop IP
+2. `arp_resolve(next_hop_ip)` checks the table
+3. If found → return MAC, packet sent immediately
+4. If not found → send ARP request (broadcast), use broadcast MAC as fallback
+5. When ARP reply arrives → `arp_add_entry()` updates the table
+6. Next packet to same destination will resolve immediately
+
+**ARP input handling:**
+- Always learn sender's MAC (regardless of request/reply)
+- If ARP request targets our IP → send ARP reply
+
+### IP fragmentation details
+
+**Fragmentation (outbound):**
+- If packet exceeds interface MTU, split into fragments
+- Each fragment has the same IP ID
+- All fragments except last have MF (More Fragments) flag set
+- Fragment offset is in units of 8 bytes
+- DF (Don't Fragment) flag is respected — if set, packet is dropped instead of fragmented
+
+**Reassembly (inbound):**
+- Fragments are collected in a reassembly buffer (up to 32 concurrent)
+- When all fragments received (last fragment has MF=0), reassemble and deliver
+- Timeout: 30 seconds — incomplete reassembly is dropped
+- Security: reject overlapping fragments, enforce minimum fragment size (68 bytes)
+
+### Demo results (verified on WSL)
+
+**Terminal 1 output (router started with config):**
+```
+[INFO ] [VNIC] Created TAP interface: iron0 (fd=4)
+[INFO ] [IFACE] Interface iron0 added: 10.0.1.1/24 (vnic=0)
+[INFO ] [VNIC] Created TAP interface: iron1 (fd=5)
+[INFO ] [IFACE] Interface iron1 added: 10.0.2.1/24 (vnic=1)
+[INFO ] [ROUTE] Route added: 10.0.1.0/24 via 10.0.1.0 iface 0
+[INFO ] [ROUTE] Route added: 10.0.2.0/24 via 10.0.2.0 iface 1
+[INFO ] [ACL] Rule 1 added (PERMIT)   ← TCP port 80
+[INFO ] [ACL] Rule 2 added (PERMIT)   ← ICMP
+[INFO ] [ACL] Rule 3 added (DENY)     ← TCP port 22
+```
+
+**Terminal 2 — ping works:**
+```
+$ ping -c 3 10.0.1.1
+64 bytes from 10.0.1.1: icmp_seq=1 ttl=64 time=1.45 ms
+64 bytes from 10.0.1.1: icmp_seq=2 ttl=64 time=1.14 ms
+64 bytes from 10.0.1.1: icmp_seq=3 ttl=64 time=1.40 ms
+```
+
+**Terminal 2 — nc port 22 (denied by ACL):**
+```
+$ nc -zv 10.0.1.1 22
+(hangs — no response)
+```
+
+**Terminal 1 shows:**
+```
+[INFO ] [ACL] DENY rule 3: 10.0.1.2 -> 10.0.1.1 proto=6 sport=54321 dport=22
+```
+
+### Command-line usage
+
+```bash
+# Basic (no config, no TAP)
+./ironstack/ironstack
+
+# With config file (creates TAP interfaces, requires sudo)
+sudo ./ironstack/ironstack ../src/configs/router.conf
+
+# With debug logging
+sudo ./ironstack/ironstack -d ../src/configs/router.conf
+
+# Help
+./ironstack/ironstack -h
+```
+
+### Current test summary
+
+After Phase 7, the project has:
+- **6 unit tests**: test_stats, test_eth, test_route, test_acl, test_tcp, test_ipsec
+- **5 module tests**: test_l2_module, test_l3_module, test_pbr_acl_module, test_l4_module, test_ipsec_module
+- **Total: 11 tests, all passing**
+- **Live demo**: virtual router with real TAP interfaces on WSL
