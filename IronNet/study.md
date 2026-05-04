@@ -790,42 +790,161 @@ Dynamic routing protocols (OSPF, BGP) are **out of scope** for IronNet. The proj
 
 ---
 
-## Phase 12: Security Testing — ironfuzz, ironprobe, ironload (Week 27–32)
+## Phase 12: Security Testing — ironfuzz, ironprobe, ironload (Week 29–34)
 
-### Goals
-- Network scanner for attack surface validation
-- Protocol fuzzer with state-aware mutation
-- Stress tester for resource exhaustion analysis
+### Analysis: What exists vs what's needed
 
-### Tasks
+| Component | What exists | What's needed |
+|-----------|------------|---------------|
+| Target stack | ✅ Full L2-L4 stack with 5 apps running | Ready to be tested |
+| Packet injection | ✅ `vnic_inject()` API exists | Can send raw frames into the stack |
+| Crash detection | ✅ ASAN enabled in Debug builds | Crashes caught automatically |
+| Metrics | ✅ Stats counters, audit log | Can observe effects of testing |
+| Scanner | ❌ Not implemented | Need ironprobe |
+| Fuzzer | ❌ Not implemented | Need ironfuzz |
+| Stress tester | ❌ Not implemented | Need ironload |
 
-1. **ironprobe (scanner)**
-   - Port presence checks
-   - ICMP probing
-   - Service response fingerprinting
-   - ACL correctness validation
+### Design decision
 
-2. **ironfuzz (fuzzer)**
-   - Corpus manager (seed packets)
-   - Mutation engine:
-     - Length variation
-     - Field bit-flip
-     - Reordered packets
-     - Invalid state transitions
-     - Partial payloads
-   - Packet injector (feeds into ironstack)
-   - Crash/metric monitor (ASAN + assertion failures)
-   - Coverage tracking:
-     - TCP state coverage
-     - Transition coverage
-     - Drop-reason coverage
-     - Config × packet interaction coverage
+| Option | Architecture | Chosen? |
+|--------|-------------|---------|
+| **A. Internal tools** | Run inside same process, inject packets directly into pipeline | ✅ Yes (fast, automated, no sudo needed) |
+| B. External tools | Separate binaries sending real packets via TAP | Also supported (for realistic testing against live router) |
 
-3. **ironload (stress tester)**
-   - Connection table pressure (many SYNs)
-   - Routing lookup overload (large FIB)
-   - ACL complexity impact (many rules)
-   - Metrics: drop patterns, latency escalation, degradation behavior
+**Decision:** Build tools that can run both ways — internally for automated testing (module tests, CI), and externally against the live router for realistic validation.
+
+### Relationship to Phase 13
+
+- **Phase 12** builds **generic testing tools** (scan, fuzz, stress)
+- **Phase 13** uses these tools to simulate **specific named attacks** (SYN flood, ARP spoofing, VLAN hopping) and implements **defenses** against them
+
+### Design: Sub-phases
+
+| Sub-phase | Component | Scope |
+|-----------|-----------|-------|
+| 12a | ironprobe (scanner) | Port scan, ICMP probe, service fingerprint, ACL validation |
+| 12b | ironfuzz (fuzzer) | Mutation engine, corpus, packet injection, crash monitoring |
+| 12c | ironload (stress tester) | SYN flood, connection exhaustion, FIB overload |
+
+### Phase 12a: ironprobe — Network Scanner (Week 29–30)
+
+#### Goals
+- Discover open ports and services on the target stack
+- Validate ACL enforcement (verify blocked ports are actually blocked)
+- Fingerprint services by their responses
+
+#### Tasks
+
+1. **Port scanner**
+   - TCP SYN scan: send SYN, check for SYN+ACK (open) or no response (filtered)
+   - UDP scan: send probe, check for response (open) or ICMP unreachable (closed)
+   - Scan range: configurable port range
+
+2. **ICMP prober**
+   - Ping sweep: discover live hosts
+   - TTL-based traceroute: discover path
+
+3. **Service fingerprinting**
+   - Connect to open port, send probe, classify response
+   - Identify: echo, DNS, KV, HTTP, RPC by response pattern
+
+4. **ACL validation**
+   - Given a set of expected-open and expected-closed ports
+   - Verify ACL is correctly blocking/permitting
+   - Report mismatches
+
+5. **Validation**
+   - Module test: scan ports 1-100, verify ports 7,53,6379,8080,9000 detected as open
+   - ACL test: verify port 22 shows as filtered
+
+### Phase 12b: ironfuzz — Protocol Fuzzer (Week 30–32)
+
+#### Goals
+- Automatically generate malformed packets to find crashes and bugs
+- State-aware mutation (fuzz at different TCP states)
+- Coverage-guided (track which code paths are exercised)
+
+#### Tasks
+
+1. **Corpus manager**
+   - Seed packets: valid examples for each protocol (TCP SYN, HTTP GET, DNS query, RPC PING)
+   - Store interesting inputs (those that trigger new coverage)
+   - Crash inputs saved for reproduction
+
+2. **Mutation engine**
+   - Bit-flip: random bit changes
+   - Byte-flip: random byte changes
+   - Length mutation: truncate, extend, zero-length
+   - Field-aware: mutate specific protocol fields (ports, flags, lengths)
+   - Insertion/deletion: add or remove bytes
+   - Boundary values: 0, 1, 0xFF, 0xFFFF, max values
+
+3. **Packet injector**
+   - Internal mode: call `ip_input()` or `tcp_input()` directly
+   - External mode: write to TAP device
+   - Rate control: configurable packets/second
+
+4. **Crash/anomaly monitor**
+   - ASAN: detects memory errors (use-after-free, buffer overflow)
+   - Assertion failures: IRON_ASSERT violations
+   - Metric anomalies: unexpected counter spikes
+   - Timeout detection: stuck processing
+
+5. **Coverage tracking**
+   - TCP state coverage: which states were reached
+   - Drop-reason coverage: which drop paths were triggered
+   - Code coverage: (optional, via gcov/llvm-cov)
+
+6. **Validation**
+   - Fuzz echo server: 10000 mutations, no crashes
+   - Fuzz DNS server: malformed queries, no crashes
+   - Fuzz RPC server: invalid magic/length, no crashes
+   - Fuzz TCP state machine: invalid flag sequences, no state corruption
+
+### Phase 12c: ironload — Stress Tester (Week 33–34)
+
+#### Goals
+- Test resource limits and graceful degradation under load
+- Measure performance boundaries
+
+#### Tasks
+
+1. **TCP connection pressure**
+   - Send many SYNs rapidly (fill connection table)
+   - Measure: how many connections before rejection?
+   - Observe: does the stack degrade gracefully or crash?
+
+2. **Routing table stress**
+   - Add many routes (fill FIB)
+   - Measure: lookup latency vs table size
+   - Observe: does longest-prefix match slow down?
+
+3. **ACL complexity stress**
+   - Add many ACL rules
+   - Measure: per-packet evaluation time vs rule count
+   - Observe: linear degradation or cliff?
+
+4. **Bandwidth flooding**
+   - Send maximum rate traffic through the pipeline
+   - Measure: packets/second throughput
+   - Observe: drop patterns under overload
+
+5. **Report generation**
+   - Summary: max connections, max throughput, degradation point
+   - Per-test: pass/fail based on configurable thresholds
+
+6. **Validation**
+   - Fill TCP table (256 connections) → verify graceful rejection
+   - 10000 packets/second → measure drop rate
+   - 128 routes → verify lookup still works
+
+### Phase 12 Sub-phase Summary
+
+| Sub-phase | Component | Week | Output |
+|-----------|-----------|------|--------|
+| 12a | ironprobe (scanner) | Week 29–30 | Port scan results, ACL validation report |
+| 12b | ironfuzz (fuzzer) | Week 30–32 | Crash reports, coverage metrics |
+| 12c | ironload (stress) | Week 33–34 | Performance report, degradation analysis |
 
 ---
 
@@ -994,7 +1113,7 @@ Dynamic routing protocols (OSPF, BGP) are **out of scope** for IronNet. The proj
 | 9 | ironctl (CLI) | Week 21–22 |
 | 10 | ironmon (telemetry) | Week 23–24 |
 | 11 | ironapps (socket API + target apps) | Week 25–28 |
-| 12 | ironfuzz / ironprobe / ironload | Week 27–32 |
+| 12 | ironfuzz / ironprobe / ironload | Week 29–34 |
 | 13 | Attack Simulation & Defense | Week 33–36 |
 | 14 | ironsim (emulator) | Week 37–38 |
 | 15 | irontrace (capture/replay) | Week 39–40 |
