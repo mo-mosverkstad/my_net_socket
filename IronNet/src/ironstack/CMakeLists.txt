@@ -11,6 +11,7 @@ add_executable(ironstack
     l2/bridge.c
     l3/ip.c
     l3/route.c
+    l3/route_table.c
     l3/icmp.c
     l3/acl.c
     l3/pbr.c

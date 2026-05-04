@@ -72,6 +72,13 @@ target_include_directories(test_pbr PRIVATE
 )
 target_link_libraries(test_pbr iron_common)
 
+add_executable(test_route_table unit/test_route_table.c)
+target_include_directories(test_route_table PRIVATE
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+)
+target_link_libraries(test_route_table iron_common)
+
 # Module tests
 add_executable(test_l2_module module/test_l2_module.c)
 target_include_directories(test_l2_module PRIVATE
@@ -129,6 +136,14 @@ target_include_directories(test_bridge_module PRIVATE
 )
 target_link_libraries(test_bridge_module iron_common)
 
+add_executable(test_route_table_module module/test_route_table_module.c)
+target_include_directories(test_route_table_module PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/module
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+)
+target_link_libraries(test_route_table_module iron_common)
+
 enable_testing()
 
 # Unit tests
@@ -143,6 +158,7 @@ add_test(NAME test_arp COMMAND test_arp)
 add_test(NAME test_ip_frag COMMAND test_ip_frag)
 add_test(NAME test_iface COMMAND test_iface)
 add_test(NAME test_pbr COMMAND test_pbr)
+add_test(NAME test_route_table COMMAND test_route_table)
 
 # Module tests
 add_test(NAME module_l2 COMMAND test_l2_module)
@@ -152,3 +168,4 @@ add_test(NAME module_l4 COMMAND test_l4_module)
 add_test(NAME module_ipsec COMMAND test_ipsec_module)
 add_test(NAME module_vlan COMMAND test_vlan_module)
 add_test(NAME module_bridge COMMAND test_bridge_module)
+add_test(NAME module_route_table COMMAND test_route_table_module)

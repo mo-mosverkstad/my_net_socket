@@ -12,7 +12,7 @@ ctest --output-on-failure
 ../src/tests/run_module_tests.sh .
 ```
 
-**Current total: 18 tests (11 unit + 7 module), all passing.**
+**Current total: 20 tests (12 unit + 8 module), all passing.**
 
 ---
 
@@ -127,6 +127,17 @@ Unit tests are fast, minimal-output correctness checks. Each validates a single 
 | test_pbr_loop_detection | Same hop visited twice → loop detected (rc=-2) |
 | test_pbr_delete | Deleted rule no longer matches |
 
+### test_route_table (6 assertions)
+
+| Test | What it verifies |
+|------|------------------|
+| test_default_main_table | "main" table created automatically at init |
+| test_create_and_find | Create named table, find by name |
+| test_independent_tables | Same prefix in different tables → different next-hop |
+| test_longest_prefix_per_table | Longest-prefix match works per table |
+| test_delete_route | Deleted route no longer matches |
+| test_duplicate_table_name | Duplicate name returns existing table |
+
 ---
 
 ## Module Tests
@@ -194,6 +205,14 @@ Module tests produce verbose output with hex dumps, decoded fields, and visible 
 | VLAN isolation | Broadcast only reaches ports in same VLAN |
 | Same-port drop (no hairpin) | Destination on same port → dropped |
 
+### test_route_table_module (3 test cases)
+
+| Test | What it demonstrates |
+|------|---------------------|
+| Independent routing | Same destination in different tables → different next-hop |
+| PBR table selection | PBR matches src prefix → uses alternate table |
+| Table isolation | Route in one table not visible in another |
+
 ---
 
 ## Live Demo
@@ -225,6 +244,7 @@ ctest --output-on-failure
 ./tests/test_ip_frag
 ./tests/test_iface
 ./tests/test_pbr
+./tests/test_route_table
 
 # Single module test (verbose)
 ./tests/test_l2_module
@@ -234,6 +254,7 @@ ctest --output-on-failure
 ./tests/test_ipsec_module
 ./tests/test_vlan_module
 ./tests/test_bridge_module
+./tests/test_route_table_module
 
 # All module tests via script
 ../src/tests/run_module_tests.sh .

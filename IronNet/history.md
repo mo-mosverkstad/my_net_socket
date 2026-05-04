@@ -1759,3 +1759,116 @@ cd IronNet/build
 # All tests
 ctest --output-on-failure
 ```
+
+---
+
+## Phase 8c: Multiple Routing Tables
+
+### What was done
+
+We implemented support for multiple independent routing tables (VRF-lite), allowing different traffic to be routed through different paths based on PBR policy.
+
+### Concepts explained
+
+**Why multiple routing tables?**
+
+In a single routing table, all traffic to the same destination takes the same path. But in real networks, you often need:
+- Management traffic to use a separate path from production traffic
+- Different customers/tenants to have isolated routing
+- PBR to select not just a next-hop, but an entirely different routing table
+
+This is called **VRF-lite** (Virtual Routing and Forwarding, lightweight version).
+
+**How it works:**
+1. Multiple named tables exist (e.g., "main", "mgmt", "customer_a")
+2. Each table has its own independent FIB with longest-prefix match
+3. PBR rules can specify which table to use for matching traffic
+4. If no PBR match, the default "main" table is used
+
+**Example:**
+```
+Table "main":   0.0.0.0/0 via 10.0.1.254 (internet gateway)
+Table "mgmt":   0.0.0.0/0 via 192.168.0.1 (management network)
+
+PBR: src 10.0.99.0/24 → use table "mgmt"
+```
+
+Traffic from 10.0.99.x goes through the management gateway. All other traffic uses the internet gateway.
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironstack/l3/route_table.h` | Named table registry, per-table FIB API |
+| `ironstack/l3/route_table.c` | Multiple independent FIBs with longest-prefix match |
+| `tests/unit/test_route_table.c` | 6 unit tests |
+| `tests/module/test_route_table_module.c` | 3 module tests |
+
+### Implementation details
+
+**Table registry:**
+- Up to 8 named tables
+- "main" table (id=0) created automatically at init
+- `route_table_create(name)` — returns existing if duplicate name
+- `route_table_find(name)` — lookup by name, returns table id
+
+**Per-table operations:**
+- `route_table_add_route(table_id, prefix, next_hop, out_iface)`
+- `route_table_delete_route(table_id, prefix)`
+- `route_table_lookup(table_id, dst_ip, *next_hop, *out_iface)` — longest-prefix match within that table only
+
+**Key property: table isolation**
+- A route added to table "mgmt" is NOT visible in table "main"
+- Each table is completely independent
+
+### Tests created
+
+#### Unit test: test_route_table (6 tests)
+
+- `test_default_main_table` — "main" exists after init
+- `test_create_and_find` — create "mgmt", find by name
+- `test_independent_tables` — same prefix, different tables → different next-hop
+- `test_longest_prefix_per_table` — /24 beats /0 within same table
+- `test_delete_route` — deleted route no longer matches
+- `test_duplicate_table_name` — creating same name returns existing id
+
+#### Module test: test_route_table_module (3 tests)
+
+**Test 1: Independent routing**
+- 10.0.5.1 looked up in "main" → next_hop=10.0.1.254, iface=0
+- 10.0.5.1 looked up in "mgmt" → next_hop=192.168.1.1, iface=1
+
+**Test 2: PBR table selection**
+- Packet from 10.0.99.5 → PBR matches → uses "mgmt" table → iface=2
+- Packet from 10.0.1.5 → no PBR match → uses "main" table → iface=0
+
+**Test 3: Table isolation**
+- Route 172.16.0.0/16 only in "custom" table
+- Lookup in "custom" → FOUND
+- Lookup in "main" → NOT FOUND
+
+### Integration note
+
+The multiple routing tables module is currently standalone. To fully integrate with the forwarding path, the PBR action structure would be extended to include a `table_id` field, and `ip.c` would call `route_table_lookup(table_id, ...)` instead of `route_lookup(...)`. This integration is straightforward and can be done when the control plane (Phase 9) provides the configuration interface.
+
+### Current test summary
+
+After Phase 8c:
+- **12 unit tests**: test_stats, test_eth, test_route, test_acl, test_tcp, test_ipsec, test_vlan, test_arp, test_ip_frag, test_iface, test_pbr, test_route_table
+- **8 module tests**: test_l2_module, test_l3_module, test_pbr_acl_module, test_l4_module, test_ipsec_module, test_vlan_module, test_bridge_module, test_route_table_module
+- **Total: 20 tests, all passing**
+
+### How to run Phase 8c tests
+
+```bash
+cd IronNet/build
+
+# Route table unit test
+./tests/test_route_table
+
+# Route table module test (verbose)
+./tests/test_route_table_module
+
+# All tests
+ctest --output-on-failure
+```

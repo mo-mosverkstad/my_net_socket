@@ -208,6 +208,16 @@ sudo ip link delete iron1
 
 For a complete list of all unit tests and module tests, see `test.md`.
 
+Key module tests with visible output:
+- `./tests/test_l2_module` — Ethernet frame hex dumps
+- `./tests/test_l3_module` — IP forwarding and ICMP
+- `./tests/test_pbr_acl_module` — PBR redirect and ACL deny
+- `./tests/test_l4_module` — TCP handshake and UDP
+- `./tests/test_ipsec_module` — Encrypt/decrypt roundtrip
+- `./tests/test_vlan_module` — VLAN tag insert/strip
+- `./tests/test_bridge_module` — MAC learning and flooding
+- `./tests/test_route_table_module` — Multiple routing tables with PBR selection
+
 To run all tests:
 ```bash
 cd IronNet/build
