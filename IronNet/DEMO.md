@@ -562,6 +562,54 @@ ironctl> fuzz rpc 500
 
 Mutation strategies applied: bit-flip, byte-flip, truncate, extend, boundary values, insert, delete, field-aware.
 
+### Stress Tester (ironload)
+
+Stress test subsystems to measure resource limits and graceful degradation:
+
+```
+ironctl> load tcp 300
+=== Load Test: TCP Flood ===
+  Attempted:  300
+  Succeeded:  256
+  Rejected:   44
+  Elapsed:    2423 us
+  Avg/op:     8076 ns
+  Result:     PASS (graceful)
+
+ironctl> load route 128
+=== Load Test: Route Stress ===
+  Attempted:  128
+  Succeeded:  128
+  Rejected:   0
+  Elapsed:    2626 us
+  Avg/op:     2248 ns
+  Result:     PASS (graceful)
+
+ironctl> load acl 100
+=== Load Test: ACL Stress ===
+  Attempted:  100
+  Succeeded:  100
+  Rejected:   0
+  Elapsed:    9031 us
+  Avg/op:     8805 ns
+  Result:     PASS (graceful)
+
+ironctl> load bw 10000
+=== Load Test: Bandwidth ===
+  Attempted:  10000
+  Succeeded:  0
+  Rejected:   10000
+  Elapsed:    21547 us
+  Avg/op:     2154 ns
+  Result:     PASS (graceful)
+```
+
+Tests available:
+- `load tcp [count]` — SYN flood to fill connection table (max 256), verify graceful rejection
+- `load route [count]` — Add routes to FIB, measure lookup latency vs table size
+- `load acl [count]` — Add ACL rules, measure per-packet evaluation time
+- `load bw [count]` — Send max-rate packets, measure throughput and drop patterns
+
 ### Audit log file
 
 Events are also written to `/tmp/ironnet_audit.log` in structured format:

@@ -95,6 +95,7 @@ scan <ip> [start] [end] - Scan ports on target
 ping <ip>               - Check if target is alive
 acl-check <ip>          - Validate ACL enforcement
 fuzz <tcp|dns|http|rpc> <iterations> - Fuzz a target protocol
+load <tcp|route|acl|bw> [count]     - Stress test a subsystem
 exit                    - Stop the router
 ```
 
@@ -250,6 +251,7 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | libiron_apps.a | `build/ironapps/libiron_apps.a` | Library | Application servers (echo, DNS, KV, HTTP, RPC) |
 | libiron_probe.a | `build/ironprobe/libiron_probe.a` | Library | Network scanner |
 | libiron_fuzz.a | `build/ironfuzz/libiron_fuzz.a` | Library | Protocol fuzzer |
+| libiron_load.a | `build/ironload/libiron_load.a` | Library | Stress tester |
 
 ---
 

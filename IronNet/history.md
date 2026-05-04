@@ -2767,3 +2767,128 @@ Targets: tcp, dns, http, rpc
 After Phase 12b:
 - **14 unit tests + 10 module tests = 24 tests, all passing**
 - Fuzzer tested interactively via CLI (0 crashes in 2000 iterations)
+
+---
+
+## Phase 12c: ironload — Stress Tester
+
+### What was done
+
+We implemented a stress tester (ironload) that measures resource limits and graceful degradation under load. It tests four subsystems: TCP connection table, routing table, ACL rule evaluation, and raw packet throughput.
+
+### Concepts explained
+
+**Why stress testing matters:**
+
+A network stack must handle overload gracefully — rejecting excess traffic without crashing, corrupting state, or leaking memory. Stress testing answers:
+- How many connections before the table is full?
+- Does lookup performance degrade linearly or hit a cliff?
+- Does the stack crash under sustained high-rate input?
+
+**Graceful degradation vs crash:**
+- Graceful: new SYNs are rejected with a counter increment, existing connections continue working
+- Crash: ASAN detects buffer overflow, assertion fires, or segfault occurs
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironload/load.h` | Test types (4), config, result structures |
+| `ironload/load.c` | TCP flood, route stress, ACL stress, bandwidth test |
+| `ironload/CMakeLists.txt` | Builds iron_load as static library |
+
+### Test types (4 total)
+
+| Test | What it measures |
+|------|-----------------|
+| `LOAD_TCP_FLOOD` | Send N SYNs from unique sources, fill connection table (max 256) |
+| `LOAD_ROUTE_STRESS` | Add N routes to FIB, measure lookup latency vs table size |
+| `LOAD_ACL_STRESS` | Add N ACL rules, measure per-packet evaluation time |
+| `LOAD_BANDWIDTH` | Send N packets at max rate, measure throughput (packets/sec) |
+
+### Implementation details
+
+**TCP flood test:**
+- Generates SYN packets from unique source IPs (192.168.10.x) with unique ports
+- Feeds directly into `tcp_input()` (internal injection, no TAP needed)
+- Counts accepted vs rejected connections
+- TCP_MAX_CONNECTIONS = 256, so 300 SYNs → 256 accepted, 44 rejected
+
+**Route stress test:**
+- Adds routes (10.X.Y.0/24) up to ROUTE_MAX_ENTRIES (128)
+- Performs 1000 lookups and measures average time per lookup
+- Cleans up all added routes after test
+
+**ACL stress test:**
+- Adds rules matching different destination ports (2000+i)
+- Performs 1000 evaluations and measures average time per evaluation
+- Cleans up all added rules after test
+
+**Bandwidth test:**
+- Sends TCP data packets (ACK + 64 bytes payload) at max rate
+- Measures total time and calculates packets/second
+- All packets are rejected (no matching connection) — tests the rejection path performance
+
+### CLI command
+
+```
+ironctl> load <tcp|route|acl|bw> [count]
+```
+
+Default count: 256 (matches TCP_MAX_CONNECTIONS).
+
+### Results
+
+```
+=== Load Test: TCP Flood ===
+  Attempted:  300
+  Succeeded:  256
+  Rejected:   44
+  Elapsed:    2423 us
+  Avg/op:     8076 ns
+  Result:     PASS (graceful)
+
+=== Load Test: Route Stress ===
+  Attempted:  128
+  Succeeded:  128
+  Rejected:   0
+  Elapsed:    2626 us
+  Avg/op:     2248 ns
+  Result:     PASS (graceful)
+
+=== Load Test: ACL Stress ===
+  Attempted:  100
+  Succeeded:  100
+  Rejected:   0
+  Elapsed:    9031 us
+  Avg/op:     8805 ns
+  Result:     PASS (graceful)
+
+=== Load Test: Bandwidth ===
+  Attempted:  10000
+  Succeeded:  0
+  Rejected:   10000
+  Elapsed:    21547 us
+  Avg/op:     2154 ns
+  Result:     PASS (graceful)
+```
+
+**Key findings:**
+- TCP table fills at exactly 256 (TCP_MAX_CONNECTIONS), then gracefully rejects — no crash
+- Route lookup averages ~2.2 μs with 128 entries (linear scan, acceptable for research)
+- ACL evaluation averages ~8.8 μs with 100 rules (linear scan, expected)
+- Raw packet throughput: ~464,000 packets/sec (rejection path)
+- All tests PASS — no crashes, no ASAN violations, no assertion failures
+
+### Integration
+
+- `ironload/CMakeLists.txt` builds `libiron_load.a`
+- ironstack links against `iron_load`
+- CLI dispatches `load` command to `load_run()` + `load_print_result()`
+
+### Current test summary
+
+After Phase 12c:
+- **14 unit tests + 10 module tests = 24 tests, all passing**
+- Stress tester tested interactively via CLI (all 4 tests PASS)
+- Phase 12 (Security Testing) is now complete: ironprobe + ironfuzz + ironload

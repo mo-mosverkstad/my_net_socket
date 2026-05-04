@@ -17,6 +17,7 @@
 #include "../ironmon/stats_json.h"
 #include "../ironprobe/probe.h"
 #include "../ironfuzz/fuzz.h"
+#include "../ironload/load.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -72,6 +73,7 @@ static void cmd_help(void) {
     printf("  ping <ip>               - Check if target is alive\n");
     printf("  acl-check <ip>          - Validate ACL enforcement\n");
     printf("  fuzz <tcp|dns|http|rpc> <iterations> - Fuzz a target\n");
+    printf("  load <tcp|route|acl|bw> [count]       - Stress test\n");
     printf("  help                    - Show this help\n");
     printf("  exit                    - Stop the router\n");
 }
@@ -333,6 +335,33 @@ int cli_execute(const char *line) {
             }
 
             fuzz_print_stats(&engine);
+        }
+    } else if (strcmp(argv[0], "load") == 0) {
+        /* load <test> [count] */
+        if (argc < 2) {
+            printf("Usage: load <tcp|route|acl|bw> [count]\n");
+        } else {
+            load_config_t cfg = {0};
+            cfg.count = (argc >= 3) ? atoi(argv[2]) : LOAD_DEFAULT_COUNT;
+            cfg.target_ip = 0x0A000101; /* 10.0.1.1 */
+            cfg.target_port = 7;
+
+            if (strcmp(argv[1], "tcp") == 0)
+                cfg.test = LOAD_TCP_FLOOD;
+            else if (strcmp(argv[1], "route") == 0)
+                cfg.test = LOAD_ROUTE_STRESS;
+            else if (strcmp(argv[1], "acl") == 0)
+                cfg.test = LOAD_ACL_STRESS;
+            else if (strcmp(argv[1], "bw") == 0)
+                cfg.test = LOAD_BANDWIDTH;
+            else {
+                printf("Unknown test: %s (use tcp|route|acl|bw)\n", argv[1]);
+                return 0;
+            }
+
+            load_result_t result;
+            load_run(&cfg, &result);
+            load_print_result(&result);
         }
     } else if (strcmp(argv[0], "audit") == 0) {
         if (argc >= 2 && strcmp(argv[1], "enable") == 0) {
