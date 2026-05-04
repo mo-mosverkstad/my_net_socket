@@ -663,24 +663,126 @@ A **bridge** (or Layer 2 switch) connects multiple ports and forwards Ethernet f
 
 ---
 
-## Phase 11: Target Applications — ironapps (Week 25–26)
+## Phase 11: Target Applications — ironapps (Week 25–28)
 
-### Goals
-- Build simple applications as attack targets
-- Stateful, input-parsing, resource-consuming
+### Analysis: What exists vs what's needed
 
-### Tasks
+| Aspect | Current state | Gap |
+|--------|--------------|-----|
+| Socket API | TCP/UDP modules process packets but have no app-facing interface | Need `socket_listen()` / `socket_accept()` / `socket_send()` / `socket_recv()` |
+| TCP response | TCP receives SYN, creates SYN_RECV, but never sends SYN+ACK back | Need TCP to generate response packets (SYN+ACK, data, FIN) |
+| UDP response | UDP receives packets but cannot send replies | Need UDP send capability from application layer |
+| App registration | Not implemented | Need port-to-application dispatch table |
+| Data delivery | TCP tracks state but doesn't deliver payload to apps | Need callback or buffer for app to read received data |
 
-1. **Echo server** — basic connectivity validation
-2. **Key-Value TCP server** — stateful, memory-consuming
-3. **Custom binary RPC** — complex parsing (ideal fuzz target)
-4. **Simple HTTP-like service** — text protocol parsing
-5. **DNS server (simplified)** — UDP-based name resolution
-   - Responds to A record queries from a static zone file
-   - Attack surface: DNS amplification, spoofing, cache poisoning study
-   - Common penetration testing entry point
+### Key challenge
 
-All apps register with ironstack via a socket-like API and run on top of the custom TCP/UDP.
+The biggest gap is that **ironstack currently has no way to send TCP/UDP responses**. The TCP state machine tracks state but doesn't generate packets. To make applications work, we need:
+1. TCP output — generate SYN+ACK, ACK, data segments, FIN
+2. Application socket API — apps register on ports, receive data, send responses
+3. Application dispatch — when TCP/UDP delivers data, route it to the registered app
+
+### Design: Sub-phases
+
+This phase is split into 3 sub-phases due to its scope:
+
+| Sub-phase | Component | Scope |
+|-----------|-----------|-------|
+| 11a | Socket API + TCP output | App registration, TCP generates SYN+ACK/data/FIN, socket send/recv |
+| 11b | Echo server + DNS server | Simple apps that prove the API works |
+| 11c | KV server + HTTP-like + Binary RPC | Complex apps as fuzz/attack targets |
+
+### Phase 11a: Socket API + TCP Output (Week 25–26)
+
+#### Goals
+- Create application-facing socket API
+- Enable TCP to generate response packets (SYN+ACK, ACK, data, FIN)
+- Enable UDP to send reply packets
+- Port-based application dispatch
+
+#### Tasks
+
+1. **Application socket API (`ironapps/socket_api.h`)**
+   ```c
+   int iron_socket_listen(uint8_t protocol, uint16_t port, app_callback_t callback);
+   int iron_socket_send(int sock_id, const uint8_t *data, int len);
+   int iron_socket_close(int sock_id);
+   ```
+
+2. **TCP output (extend `tcp.c`)**
+   - Generate SYN+ACK when SYN received on a listening port
+   - Generate ACK for received data
+   - Generate data segments when app calls `iron_socket_send()`
+   - Generate FIN when app calls `iron_socket_close()`
+   - Recompute checksums for outbound segments
+
+3. **UDP output (extend `udp.c`)**
+   - `udp_send(src_ip, dst_ip, src_port, dst_port, data, len)` — build and send UDP packet
+
+4. **Application dispatch table**
+   - Register: protocol + port → callback function
+   - When TCP delivers data or UDP receives packet → call registered callback
+   - Max 32 registered applications
+
+5. **Validation**
+   - Module test: register echo callback on port 7, send data, verify reply
+   - TCP handshake completes (SYN → SYN+ACK → ACK)
+   - `nc` to port 7 actually gets a response
+
+### Phase 11b: Echo Server + DNS Server (Week 26–27)
+
+#### Goals
+- Implement simple applications that validate the socket API
+
+#### Tasks
+
+1. **Echo server (TCP, port 7)**
+   - Accepts connection
+   - Echoes back any received data
+   - Closes when client closes
+
+2. **Echo server (UDP, port 7)**
+   - Receives UDP packet
+   - Sends back same payload to sender
+
+3. **DNS server (UDP, port 53)**
+   - Parses DNS query (A record only)
+   - Looks up name in static zone table
+   - Sends DNS response with IP address
+   - Attack surface: amplification, spoofing, malformed queries
+
+4. **Validation**
+   - `nc 10.0.1.1 7` → type text → see echo
+   - `dig @10.0.1.1 example.com` → get response
+   - Module test: DNS query/response roundtrip
+
+### Phase 11c: KV Server + HTTP-like + Binary RPC (Week 27–28)
+
+#### Goals
+- Build complex applications as attack/fuzz targets
+
+#### Tasks
+
+1. **Key-Value TCP server (port 6379)**
+   - Commands: `SET key value`, `GET key`, `DEL key`
+   - In-memory hash table
+   - Attack surface: memory exhaustion, command injection, buffer overflow
+
+2. **Simple HTTP-like service (port 8080)**
+   - Parses `GET /path HTTP/1.0` requests
+   - Returns static responses
+   - Attack surface: header parsing, path traversal, oversized headers
+
+3. **Custom binary RPC (port 9000)**
+   - Fixed-size header: `[magic 4B][cmd 2B][length 2B][payload...]`
+   - Commands: PING, ECHO, STATUS
+   - Attack surface: length field manipulation, invalid commands, truncated packets
+
+4. **Validation**
+   - KV: `SET foo bar` then `GET foo` → returns `bar`
+   - HTTP: `GET / HTTP/1.0` → returns 200 OK
+   - RPC: send PING → receive PONG
+   - Fuzz: malformed inputs don't crash (ASAN validates)
 
 ### Scope note
 
@@ -891,7 +993,7 @@ Dynamic routing protocols (OSPF, BGP) are **out of scope** for IronNet. The proj
 | 8 | VLAN, Bridge, NAT & Connection Tracking | Week 19–21 |
 | 9 | ironctl (CLI) | Week 21–22 |
 | 10 | ironmon (telemetry) | Week 23–24 |
-| 11 | ironapps (targets) | Week 25–26 |
+| 11 | ironapps (socket API + target apps) | Week 25–28 |
 | 12 | ironfuzz / ironprobe / ironload | Week 27–32 |
 | 13 | Attack Simulation & Defense | Week 33–36 |
 | 14 | ironsim (emulator) | Week 37–38 |
