@@ -276,7 +276,7 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | ironattack | `build/ironattack/ironattack` | Binary | External attack tool (syn-flood, arp-spoof, vlan-hop, rst-inject, ip-spoof, slowloris, frag-attack, icmp-redirect) |
 | ironprobe-ext | `build/ironprobe_ext/ironprobe-ext` | Binary | External real SYN scanner via raw socket |
 | ironreport | `build/ironprobe_ext/ironreport` | Binary | Automated attack-defense report (5 test pairs) |
-| ironsim | `build/ironsim/ironsim` | Binary | Network emulator (multi-node topology orchestrator) |
+| ironsim | `build/ironsim/ironsim` | Binary | Network emulator (multi-node topology with link impairments) |
 
 ---
 

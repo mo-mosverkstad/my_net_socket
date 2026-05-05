@@ -3284,3 +3284,65 @@ After Phase 14a:
 - **18 unit tests + 11 module tests = 29 tests, all passing**
 - ironsim binary built and functional
 - 2-node topology verified with ping
+
+---
+
+## Phase 14b: Network Emulator — ironsim (3-Node Topology + Link Impairments)
+
+### What was done
+
+Enhanced ironsim to support:
+1. **3-node topology** with Node B as a multi-interface router between subnets
+2. **Link impairments** via Linux `tc netem` (delay, loss, reorder)
+3. **Multi-interface nodes** — a node can have multiple IPs on different subnets
+4. **Host routes** — Linux can reach all node IPs directly via correct TAP
+5. **Clean shutdown** — stdin redirected to /dev/null for child processes
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironsim/main.c` | Complete rewrite: multi-interface nodes, link impairments via tc netem, host routes, clean shutdown |
+| `configs/topo_3node.conf` | New 3-node topology config with delay and loss |
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `configs/topo_3node.conf` | 3-node linear topology: A ←5ms→ B ←10ms/1%→ C |
+| `demos/demo.19.ironsim-3node.md` | Full demo walkthrough |
+
+### Topology config format (enhanced)
+
+```
+node a ip 10.0.1.1/24
+node b ip 10.0.1.254/24 ip 10.0.2.254/24
+node c ip 10.0.2.1/24
+
+link a b delay 5ms
+link b c delay 10ms loss 1%
+```
+
+### Verified results
+
+| Target | Expected RTT | Actual RTT | Status |
+|--------|-------------|------------|--------|
+| 10.0.1.1 (Node A) | ~5ms | 5.4-11.6ms | ✅ |
+| 10.0.1.254 (Node B, iface 1) | ~5ms | 5.9-10.9ms | ✅ |
+| 10.0.2.254 (Node B, iface 2) | ~10ms | 10.4-21.4ms | ✅ |
+| 10.0.2.1 (Node C) | ~10ms | 10.6-20.8ms | ✅ |
+| Ctrl+C shutdown | Clean | All 3 nodes stopped | ✅ |
+
+### Key design decisions
+
+- **tc netem** for impairments — no relay threads needed, standard Linux tool
+- **Host routes** for each node IP — ensures Linux sends to correct TAP regardless of subnet overlap
+- **stdin → /dev/null** for children — prevents CLI thread from blocking shutdown
+- **stderr → /dev/null** for children — keeps Terminal 1 output clean
+
+### Current test summary
+
+After Phase 14b:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- ironsim supports 2-node and 3-node topologies with link impairments
+- All nodes reachable, delay/loss verified, clean shutdown confirmed
