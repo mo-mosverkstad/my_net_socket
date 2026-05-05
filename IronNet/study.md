@@ -1311,18 +1311,181 @@ Attack tools are **separate binaries** that:
 
 ---
 
-## Phase 14: Network Emulator — ironsim (Week 37–38)
+## Phase 14: Network Emulator — ironsim (Week 41–42)
+
+This phase is split into 3 sub-phases.
 
 ### Goals
-- Run multiple ironstack instances as network nodes
-- Simulate topologies with configurable link properties
+- Run multiple ironstack instances as network nodes on a single WSL machine
+- Simulate topologies with configurable link properties (delay, drop, reorder)
+- Provide scripted multi-node setups for end-to-end testing
 
-### Tasks
+### Architecture
 
-1. **Node management** — spawn multiple stack instances
-2. **Virtual links** — configurable delay, drop rate, reorder
-3. **Topology definition** — scripted multi-node setups
-4. **Traffic generation** — automated flows between nodes
+```
+ironsim (orchestrator)
+  |
+  +-- fork/exec --> ironstack-A (iron-a0: 10.0.1.1/24)
+  |                     |
+  |                 [veth pair]
+  |                     |
+  +-- fork/exec --> ironstack-B (iron-b0: 10.0.1.254/24, iron-b1: 10.0.2.254/24)
+  |                     |
+  |                 [veth pair]
+  |                     |
+  +-- fork/exec --> ironstack-C (iron-c0: 10.0.2.1/24)
+  |
+  +-- relay threads (apply delay/drop/reorder between nodes)
+```
+
+Each ironstack instance runs as a separate process with its own TAP interfaces and config file. ironsim orchestrates startup, link creation, impairments, and shutdown.
+
+**Feasibility on single WSL machine:**
+- WSL supports multiple TAP devices with unique names
+- Each ironstack uses ~1-2 MB RAM, minimal CPU
+- 3-5 simultaneous instances is trivial
+- All instances need sudo (TAP creation)
+- Each TAP name must be unique system-wide
+
+### Design decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Node isolation | Separate processes (fork+exec) | Realistic, no shared state corruption |
+| Link mechanism | TAP + veth pairs | Linux-native, no custom IPC needed |
+| Link impairments | User-space relay thread | Portable, no tc/netem dependency |
+| Topology format | Simple config file | Flexible, easy to modify |
+| Traffic generation | Built-in ping/TCP test | Validates end-to-end connectivity |
+
+---
+
+### Phase 14a: Basic 2-Node Topology (Week 41)
+
+#### Goals
+- ironsim spawns 2 ironstack instances connected by a virtual link
+- Validate: ping from node A reaches node B through the link
+
+#### Tasks
+
+1. **ironsim binary skeleton (`ironsim/main.c`)**
+   - Parse topology config file
+   - Create TAP interfaces for each node
+   - Generate per-node router.conf files (temp files)
+   - Fork+exec ironstack child processes
+   - Wait for children, handle Ctrl+C for graceful shutdown
+
+2. **Link creation using veth pairs**
+   - For each link: create veth pair (e.g., `sim-a0` ↔ `sim-b0`)
+   - Assign IPs on the Linux side to bridge traffic between TAPs
+   - Or: use Linux bridge to connect node TAPs
+
+3. **Topology config format**
+   ```
+   # 2-node linear topology
+   node A ip 10.0.1.1/24
+   node B ip 10.0.1.254/24
+   link A B
+   ```
+
+4. **Validation**
+   - Start ironsim with 2-node config
+   - From Linux: `ping 10.0.1.1` via node A's TAP
+   - Verify: node A responds, traffic visible in both nodes
+   - ironsim prints: "Topology up: 2 nodes, 1 link"
+
+---
+
+### Phase 14b: Link Impairments + 3-Node Topology (Week 41–42)
+
+#### Goals
+- Add configurable delay, packet drop, and reorder to links
+- Support 3-node linear topology (A → B → C)
+
+#### Tasks
+
+1. **Relay thread per link**
+   - Reads packets from one end of the link
+   - Applies impairments before forwarding to the other end:
+     - **Delay**: sleep N ms before write
+     - **Drop**: skip write with probability P
+     - **Reorder**: buffer packets and deliver out of order occasionally
+   - One thread per direction (bidirectional relay)
+
+2. **Extended topology config**
+   ```
+   node A ip 10.0.1.1/24
+   node B ip 10.0.1.254/24 ip 10.0.2.254/24
+   node C ip 10.0.2.1/24
+   link A B delay 5ms loss 0.1%
+   link B C delay 10ms loss 0.5% reorder
+   ```
+
+3. **3-node routing**
+   - Node B acts as router between A and C
+   - Node A has route: 10.0.2.0/24 via 10.0.1.254
+   - Node C has route: 10.0.1.0/24 via 10.0.2.254
+   - End-to-end: A can reach C through B
+
+4. **Validation**
+   - Ping from A to C (through B): verify replies arrive
+   - With 50% drop rate: verify ~50% packet loss
+   - With 100ms delay: verify RTT increases by ~200ms
+
+---
+
+### Phase 14c: Traffic Generation + Reporting (Week 42)
+
+#### Goals
+- Built-in traffic generator for automated testing
+- Report: latency, loss, throughput per link
+
+#### Tasks
+
+1. **Traffic generator**
+   - ICMP ping flood: send N pings from A to C, measure RTT and loss
+   - TCP throughput: connect to echo server on C, send data, measure rate
+   - Configurable: `traffic A C icmp count 100` or `traffic A C tcp port 7 bytes 10000`
+
+2. **Statistics collection**
+   - Per-link: packets forwarded, dropped, delayed
+   - Per-node: stats from each ironstack instance (via `show stats` piped)
+   - End-to-end: latency distribution, loss percentage
+
+3. **Report output**
+   ```
+   === ironsim Topology Report ===
+   Nodes: 3 (A, B, C)
+   Links: 2 (A-B: 5ms/0.1%, B-C: 10ms/0.5%)
+
+   Traffic: A → C (ICMP ping × 100)
+     Sent: 100  Received: 95  Loss: 5%
+     RTT min/avg/max: 15/18/45 ms
+
+   Per-node stats:
+     A: tx=100 rx=95
+     B: forwarded=195 drops_acl=0
+     C: rx=100 tx=95
+   ```
+
+4. **Security testing through topology**
+   - Run ironprobe-ext from A scanning C through B
+   - Verify B's ACL blocks port 22 but permits port 7
+   - Run ironattack from A through B to C
+
+5. **Validation**
+   - 3-node topology with impairments: report matches expected loss/delay
+   - ACL on B blocks traffic: ping from A to C on blocked port fails
+   - End-to-end echo: data sent from A arrives at C and returns
+
+---
+
+### Phase 14 Sub-phase Summary
+
+| Sub-phase | Component | Week | Output |
+|-----------|-----------|------|--------|
+| 14a | 2-node topology + link creation | Week 41 | ironsim binary, basic connectivity |
+| 14b | Link impairments + 3-node | Week 41–42 | Delay/drop/reorder, multi-hop routing |
+| 14c | Traffic generation + report | Week 42 | Automated test report, security testing through topology |
 
 ---
 

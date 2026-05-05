@@ -19,6 +19,12 @@ cd IronNet/build
 ./ironprobe_ext/ironreport
 ```
 
+If you want a cleaner output, redirect stderr:
+
+```bash
+./ironprobe_ext/ironreport 2>/dev/null
+```
+
 Expected output:
 ```
 ╔══════════════════════════════════════════════════════════════════════╗
