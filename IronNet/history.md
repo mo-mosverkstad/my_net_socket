@@ -3229,3 +3229,58 @@ After Phase 13e:
 - ironattack binary has 8 subcommands: syn-flood, arp-spoof, vlan-hop, rst-inject, ip-spoof, slowloris, frag-attack, icmp-redirect
 - ironprobe-ext: real SYN scanner via raw socket
 - ironreport: automated 5-test attack-defense report (5/5 PASS)
+
+---
+
+## Phase 14a: Network Emulator — ironsim (2-Node Topology)
+
+### What was done
+
+We implemented the ironsim network emulator that spawns multiple ironstack instances on a single WSL machine, each with its own TAP interface and config, connected via Linux networking.
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironsim/main.c` | Orchestrator: topology parsing, node spawning (fork+exec), Linux-side wiring |
+| `ironsim/CMakeLists.txt` | Builds ironsim binary |
+| `configs/topo_2node.conf` | Sample 2-node topology config |
+| `demos/demo.18.ironsim-2node.md` | Full demo walkthrough |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `src/CMakeLists.txt` | Added `ironsim` subdirectory |
+
+### How ironsim works
+
+1. Reads topology config (or uses built-in 2-node default)
+2. For each node: generates a temporary `/tmp/ironsim_<name>.conf`
+3. Fork+exec: spawns ironstack child process with the generated config
+4. Waits 2 seconds for TAP interfaces to be created by ironstack
+5. Assigns peer IPs on Linux side (`.2` on each TAP)
+6. Enables IP forwarding in the kernel
+7. Waits for Ctrl+C, then sends SIGTERM to all children
+
+### Topology config format
+
+```
+node a ip 10.0.1.1/24
+node b ip 10.0.2.1/24
+link a b
+```
+
+### Verified results
+
+- `ping 10.0.1.1` → Node A responds ✅
+- `ping 10.0.2.1` → Node B responds ✅
+- Both nodes run simultaneously on one WSL machine ✅
+- Ctrl+C cleanly shuts down all nodes ✅
+
+### Current test summary
+
+After Phase 14a:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- ironsim binary built and functional
+- 2-node topology verified with ping

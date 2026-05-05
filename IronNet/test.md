@@ -14,7 +14,7 @@ ctest --output-on-failure
 
 **Current total: 29 tests (18 unit + 11 module), all passing.**
 
-Note: The CLI (ironctl), audit logging (ironmon), application servers (ironapps: echo port 7, DNS port 53, KV port 6379, HTTP port 8080, RPC port 9000), network scanner (ironprobe), protocol fuzzer (ironfuzz), stress tester (ironload), and external attack tool (ironattack: syn-flood, arp-spoof, vlan-hop, rst-inject, ip-spoof, slowloris, frag-attack, icmp-redirect) are tested interactively via the daemon, not via CTest. Defense mechanisms (syn-cookies, rate-limit, arp-inspection, vlan-strict, rst-validation, urpf, conn-timeout, frag-strict, icmp-redirect-disable) and management commands (tcp flush) are also tested interactively. ironprobe-ext and ironreport run standalone. See `demos/` folder for individual demo files.
+Note: The CLI (ironctl), audit logging (ironmon), application servers (ironapps: echo port 7, DNS port 53, KV port 6379, HTTP port 8080, RPC port 9000), network scanner (ironprobe), protocol fuzzer (ironfuzz), stress tester (ironload), external attack tool (ironattack: syn-flood, arp-spoof, vlan-hop, rst-inject, ip-spoof, slowloris, frag-attack, icmp-redirect), and network emulator (ironsim) are tested interactively via the daemon, not via CTest. Defense mechanisms (syn-cookies, rate-limit, arp-inspection, vlan-strict, rst-validation, urpf, conn-timeout, frag-strict, icmp-redirect-disable) and management commands (tcp flush) are also tested interactively. ironprobe-ext and ironreport run standalone. See `demos/` folder for individual demo files.
 
 ---
 

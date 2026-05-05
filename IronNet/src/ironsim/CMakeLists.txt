@@ -1,0 +1,2 @@
+add_executable(ironsim main.c)
+target_include_directories(ironsim PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
