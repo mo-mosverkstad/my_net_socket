@@ -64,6 +64,7 @@ int arp_resolve(uint32_t ip, int iface_idx, uint8_t *mac_out) {
 #include "../ironstack/l3/icmp.c"
 #include "../ironstack/l3/ip.h"
 #include "../ironstack/l3/ip.c"
+#include "../ironstack/l3/ip_frag.c"
 #include "../ironstack/l4/udp.h"
 #include "../ironstack/l4/udp.c"
 #include "../ironstack/l4/tcp.h"

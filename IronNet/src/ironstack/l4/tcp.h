@@ -70,5 +70,6 @@ int tcp_get_connection_count(void);
 tcp_conn_t *tcp_find_conn(uint32_t src_ip, uint32_t dst_ip,
                           uint16_t src_port, uint16_t dst_port);
 void tcp_flush(void);
+void tcp_set_idle_timeout(int seconds);
 
 #endif /* IRON_TCP_H */

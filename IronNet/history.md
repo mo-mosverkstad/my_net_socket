@@ -3110,3 +3110,54 @@ After Phase 13c:
 - RST validation and uRPF (strict mode) defenses integrated into TCP and IP layers
 - `tcp flush` CLI command added to clear stale connections
 - uRPF uses strict mode: packets with no route for source IP are dropped
+
+---
+
+## Phase 13d: Slowloris + Fragmentation Attacks
+
+### What was done
+
+1. **Slowloris attack** — open many TCP connections, send data very slowly to exhaust connection table
+2. **Fragmentation attack** — send overlapping and tiny IP fragments to confuse reassembly
+3. **Connection idle timeout defense** — close ESTABLISHED connections with no data after N seconds
+4. **frag-strict defense** — reject overlapping and tiny fragments with audit logging
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironattack/craft.h` | Added `craft_tcp_ack()` and `craft_ip_fragment()` declarations |
+| `ironattack/craft.c` | Implemented both crafting functions |
+| `ironattack/main.c` | Added `slowloris` and `frag-attack` subcommands |
+| `ironstack/l4/tcp.h` | Added `tcp_set_idle_timeout()` declaration |
+| `ironstack/l4/tcp.c` | Added `g_conn_timeout_sec`, `tcp_set_idle_timeout()`, idle timeout check in `tcp_timer_tick()` |
+| `ironstack/l3/ip_frag.c` | Added frag-strict defense: audit + drop for tiny/overlapping fragments |
+| `ironctl/cli.c` | Added `defense conn-timeout <secs>` command |
+| `tests/CMakeLists.txt` | Added defense_stub/audit_stub to test_ip_frag |
+
+### New CLI commands
+
+```
+ironctl> defense conn-timeout 30
+ironctl> defense frag-strict enable
+```
+
+### ironattack new commands
+
+```bash
+# Slowloris: open 50 connections to HTTP server, send partial headers slowly
+sudo ./ironattack slowloris --target 10.0.1.1 --port 8080 --conns 50
+
+# Fragmentation: overlapping fragments
+sudo ./ironattack frag-attack --target 10.0.1.1 --overlap --count 10
+
+# Fragmentation: tiny fragments (below minimum size)
+sudo ./ironattack frag-attack --target 10.0.1.1 --tiny --count 10
+```
+
+### Current test summary
+
+After Phase 13d:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- ironattack binary has 7 subcommands: syn-flood, arp-spoof, vlan-hop, rst-inject, ip-spoof, slowloris, frag-attack
+- conn-timeout and frag-strict defenses integrated

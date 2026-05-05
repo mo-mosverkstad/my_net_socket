@@ -21,12 +21,20 @@
 #include "../security/defense.h"
 
 #include <unistd.h>
+#include <time.h>
 
 #define MODULE "PIPELINE"
 #define RX_BUF_SIZE 2048
 
 static uint8_t rx_buf[RX_BUF_SIZE];
 static const char *g_conf_file = NULL;
+static uint64_t g_last_tick_sec = 0;
+
+static uint64_t pipeline_now_sec(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec;
+}
 
 void iron_pipeline_set_config(const char *conf_file) {
     g_conf_file = conf_file;
@@ -74,6 +82,16 @@ void iron_pipeline_run_once(void) {
         if (eth_parse(rx_buf, n, i, &frame) == 0) {
             eth_dispatch(&frame);
         }
+    }
+
+    /* 1-second timer tick for all subsystems */
+    uint64_t now = pipeline_now_sec();
+    if (now != g_last_tick_sec) {
+        g_last_tick_sec = now;
+        tcp_timer_tick();
+        arp_timer_tick();
+        ip_frag_timer_tick();
+        rate_limit_tick();
     }
 
     usleep(1000); /* 1ms poll interval */

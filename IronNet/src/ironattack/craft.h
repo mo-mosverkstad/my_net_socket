@@ -34,6 +34,21 @@ int craft_double_tagged(uint8_t *buf, int buf_len,
                         uint16_t outer_vlan, uint16_t inner_vlan,
                         uint32_t src_ip, uint32_t dst_ip);
 
+/* Build a TCP ACK frame (for slowloris — partial data) */
+int craft_tcp_ack(uint8_t *buf, int buf_len,
+                  const uint8_t *src_mac, const uint8_t *dst_mac,
+                  uint32_t src_ip, uint32_t dst_ip,
+                  uint16_t src_port, uint16_t dst_port,
+                  uint32_t seq, uint32_t ack_num,
+                  const uint8_t *payload, int payload_len);
+
+/* Build an IP fragment (for fragmentation attacks) */
+int craft_ip_fragment(uint8_t *buf, int buf_len,
+                      const uint8_t *src_mac, const uint8_t *dst_mac,
+                      uint32_t src_ip, uint32_t dst_ip,
+                      uint16_t id, uint16_t frag_offset, int more_frags,
+                      const uint8_t *payload, int payload_len);
+
 /* Open interface for raw packet sending (AF_PACKET) */
 int tap_open(const char *name);
 

@@ -55,10 +55,11 @@ target_include_directories(test_arp PRIVATE
 )
 target_link_libraries(test_arp iron_common)
 
-add_executable(test_ip_frag unit/test_ip_frag.c)
+add_executable(test_ip_frag unit/test_ip_frag.c stubs/defense_stub.c stubs/audit_stub.c)
 target_include_directories(test_ip_frag PRIVATE
     ${CMAKE_SOURCE_DIR}/common
     ${CMAKE_SOURCE_DIR}/ironstack
+    ${CMAKE_SOURCE_DIR}
 )
 target_link_libraries(test_ip_frag iron_common)
 

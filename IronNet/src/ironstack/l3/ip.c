@@ -63,6 +63,17 @@ int ip_input(uint8_t *data, int len, int iface_idx) {
     uint8_t *payload = data + hdr_len;
     int payload_len = iron_ntohs(hdr->total_len) - hdr_len;
 
+    /* Fragment reassembly */
+    uint16_t flags_frag = iron_ntohs(hdr->flags_frag);
+    bool is_fragment = (flags_frag & 0x2000) || (flags_frag & 0x1FFF); /* MF or offset > 0 */
+    if (is_fragment) {
+        static uint8_t reasm_buf[65535];
+        int reasm_len = ip_reassemble(data, len, reasm_buf, sizeof(reasm_buf));
+        if (reasm_len <= 0) return 0; /* Not yet complete or dropped */
+        /* Recurse with reassembled packet */
+        return ip_input(reasm_buf, reasm_len, iface_idx);
+    }
+
     /* uRPF defense: validate source IP is reachable via ingress interface */
     if (defense_is_enabled("urpf")) {
         uint32_t urpf_nh; int urpf_iface;

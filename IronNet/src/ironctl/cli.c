@@ -77,6 +77,7 @@ static void cmd_help(void) {
     printf("  load <tcp|route|acl|bw> [count]       - Stress test\n");
     printf("  defense <name> <enable|disable>        - Toggle defense\n");
     printf("  defense rate-limit <N>/s               - Set rate limit\n");
+    printf("  defense conn-timeout <secs>            - Set idle connection timeout\n");
     printf("  defense show                           - Show defense status\n");
     printf("  help                    - Show this help\n");
     printf("  exit                    - Stop the router\n");
@@ -394,6 +395,14 @@ int cli_execute(const char *line) {
                 defense_enable("rate-limit");
             } else {
                 printf("Invalid rate: %s\n", argv[2]);
+            }
+        } else if (strncmp(argv[1], "conn-timeout", 12) == 0 && argc >= 3) {
+            int secs = atoi(argv[2]);
+            if (secs > 0) {
+                tcp_set_idle_timeout(secs);
+                defense_enable("conn-timeout");
+            } else {
+                printf("Invalid timeout: %s\n", argv[2]);
             }
         } else if (argc >= 3) {
             if (strcmp(argv[2], "enable") == 0)

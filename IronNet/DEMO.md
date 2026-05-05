@@ -18,6 +18,8 @@ All demos are in the `demos/` folder. Each file is fully self-contained — it i
 | [demo.10.vlan-hop-attack.md](demos/demo.10.vlan-hop-attack.md) | Phase 13b | VLAN hopping attack + VLAN strict mode defense |
 | [demo.11.rst-inject-attack.md](demos/demo.11.rst-inject-attack.md) | Phase 13c | TCP RST injection attack + RST validation defense |
 | [demo.12.ip-spoof-attack.md](demos/demo.12.ip-spoof-attack.md) | Phase 13c | IP spoofing attack + uRPF defense |
+| [demo.13.slowloris-attack.md](demos/demo.13.slowloris-attack.md) | Phase 13d | Slowloris attack + connection idle timeout defense |
+| [demo.14.frag-attack.md](demos/demo.14.frag-attack.md) | Phase 13d | Fragmentation attack + frag-strict defense |
 
 ## Quick Build Reference
 
@@ -46,7 +48,8 @@ Commands:
   arp-spoof  --target <ip> --impersonate <ip> [--iface <name>] [--count <n>]
   vlan-hop   --target <ip> --target-vlan <vid> [--outer-vlan <vid>] [--iface <name>] [--count <n>]
   rst-inject --target <ip> --port <port> --src <ip> --sport <port> [--seq <n>] [--count <n>] [--iface <name>]
-  ip-spoof   --src <ip> --dst <ip> --port <port> [--count <n>] [--iface <name>]
+  slowloris  --target <ip> --port <port> [--conns <n>] [--iface <name>]
+  frag-attack --target <ip> [--overlap] [--tiny] [--iface <name>] [--count <n>]
 ```
 
 ## Defense Commands
@@ -59,5 +62,7 @@ ironctl> defense arp-inspection enable
 ironctl> defense vlan-strict enable
 ironctl> defense rst-validation enable
 ironctl> defense urpf enable
+ironctl> defense conn-timeout 30
+ironctl> defense frag-strict enable
 ironctl> tcp flush
 ```
