@@ -375,6 +375,13 @@ int cli_execute(const char *line) {
         } else {
             printf("Usage: audit <enable|disable>\n");
         }
+    } else if (strcmp(argv[0], "tcp") == 0) {
+        if (argc >= 2 && strcmp(argv[1], "flush") == 0) {
+            tcp_flush();
+            printf("TCP connections flushed.\n");
+        } else {
+            printf("Usage: tcp flush\n");
+        }
     } else if (strcmp(argv[0], "defense") == 0) {
         if (argc < 2) {
             printf("Usage: defense <name> <enable|disable> | defense rate-limit <N>/s | defense show\n");

@@ -8,6 +8,8 @@
 #include "../l4/tcp.h"
 #include "../core/iface.h"
 #include "../l2/arp.h"
+#include "../security/defense.h"
+#include "../ironmon/audit.h"
 #include "log.h"
 #include "stats.h"
 #include "utils.h"
@@ -60,6 +62,24 @@ int ip_input(uint8_t *data, int len, int iface_idx) {
 
     uint8_t *payload = data + hdr_len;
     int payload_len = iron_ntohs(hdr->total_len) - hdr_len;
+
+    /* uRPF defense: validate source IP is reachable via ingress interface */
+    if (defense_is_enabled("urpf")) {
+        uint32_t urpf_nh; int urpf_iface;
+        int urpf_rc = route_lookup(hdr->src_ip, &urpf_nh, &urpf_iface);
+        if (urpf_rc != 0) {
+            /* Strict mode: no route for source IP = drop */
+            LOG_WRN(MODULE, "uRPF: no route for src %08X, dropping", hdr->src_ip);
+            iron_stats_increment(STAT_L3_DROPS_INVALID);
+            return -1;
+        }
+        if (urpf_iface != iface_idx) {
+            LOG_WRN(MODULE, "uRPF: src %08X not reachable via iface %d (expected %d)",
+                    hdr->src_ip, iface_idx, urpf_iface);
+            iron_stats_increment(STAT_L3_DROPS_INVALID);
+            return -1;
+        }
+    }
 
     /* Extract ports for ACL (needed for both local and forward paths) */
     uint16_t sport = 0, dport = 0;

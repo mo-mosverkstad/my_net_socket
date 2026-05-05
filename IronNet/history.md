@@ -3042,3 +3042,71 @@ After Phase 13b:
 - New: `test_dns` (unit) — DNS zone table lookup
 - ironattack binary has 3 subcommands: syn-flood, arp-spoof, vlan-hop
 - ARP inspection and VLAN strict defenses integrated into data plane
+
+---
+
+## Phase 13c: TCP RST Injection + IP Spoofing Attack/Defense
+
+### What was done
+
+We implemented two attacks and their corresponding defenses:
+1. **TCP RST injection attack** — send forged RST packets to tear down established connections
+2. **IP spoofing attack** — send SYN packets with forged source IP to bypass source-based ACLs
+3. **RST validation defense** — only accept RST if sequence number matches expected `rcv_nxt`
+4. **uRPF (unicast Reverse Path Forwarding) defense** — validate source IP is reachable via the ingress interface
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironattack/craft.h` | Added `craft_tcp_rst()` declaration |
+| `ironattack/craft.c` | Implemented `craft_tcp_rst()`; switched to `IPPROTO_RAW` socket (packets route through kernel into TAP) |
+| `ironattack/main.c` | Added `rst-inject` and `ip-spoof` subcommands |
+| `ironstack/l4/tcp.h` | Added `tcp_flush()` declaration |
+| `ironstack/l4/tcp.c` | RST validation defense; `tcp_flush()` implementation |
+| `ironstack/l3/ip.c` | uRPF strict mode: drop if no route or wrong interface for source IP |
+| `ironctl/cli.c` | Added `tcp flush` CLI command |
+
+### How RST validation works
+
+Without defense: any RST packet matching a 4-tuple closes the connection immediately.
+
+With `defense rst-validation enable`:
+1. RST arrives for an existing connection
+2. Check: does the RST sequence number == connection's `rcv_nxt`?
+3. If yes: legitimate RST, close connection
+4. If no: forged RST (attacker guessed wrong seq), silently drop
+
+This prevents blind RST injection where the attacker doesn't know the exact sequence number.
+
+### How uRPF works
+
+Without defense: packets with any source IP are accepted regardless of which interface they arrive on.
+
+With `defense urpf enable` (strict mode):
+1. Packet arrives on interface X with source IP S
+2. Look up route for S in the routing table
+3. If no route exists for S: DROP — source is unknown/spoofed
+4. If best route for S points to interface Y (not X): DROP — source is spoofed
+5. Only if route for S points to interface X: ALLOW
+
+This prevents IP spoofing because a packet claiming to be from 10.0.99.x (which has no route) is dropped, and a packet from 10.0.2.x arriving on iron0 (route points to iron1) is also dropped.
+
+### ironattack new commands
+
+```bash
+# RST injection: kill an established connection
+sudo ./ironattack rst-inject --target 10.0.1.1 --port 7 --src 10.0.1.2 --sport 54321 --seq 1000 --count 10
+
+# IP spoofing: SYN with forged source to bypass ACLs
+sudo ./ironattack ip-spoof --src 10.0.99.1 --dst 10.0.1.1 --port 7 --count 10
+```
+
+### Current test summary
+
+After Phase 13c:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- ironattack binary has 5 subcommands: syn-flood, arp-spoof, vlan-hop, rst-inject, ip-spoof
+- RST validation and uRPF (strict mode) defenses integrated into TCP and IP layers
+- `tcp flush` CLI command added to clear stale connections
+- uRPF uses strict mode: packets with no route for source IP are dropped

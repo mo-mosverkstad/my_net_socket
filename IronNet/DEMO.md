@@ -666,6 +666,8 @@ sudo ./ironstack/ironstack ../src/configs/router.conf
 
 **Terminal 2: Run SYN flood attack**
 ```bash
+sudo ip addr add 10.0.1.2/24 dev iron0
+sudo ip link set iron0 up
 sudo ./ironattack/ironattack syn-flood --target 10.0.1.1 --port 7 --rate 1000 --count 5000
 ```
 
@@ -705,6 +707,8 @@ sudo ./ironstack/ironstack -d ../src/configs/router.conf
 
 **Terminal 2: Run ARP spoof (without defense)**
 ```bash
+sudo ip addr add 10.0.1.2/24 dev iron0
+sudo ip link set iron0 up
 sudo ./ironattack/ironattack arp-spoof --target 10.0.1.1 --impersonate 10.0.1.254 --count 3
 ```
 
@@ -765,6 +769,8 @@ sudo ./ironstack/ironstack -d ../src/configs/router.conf
 
 **Terminal 2: Run VLAN hop (without defense)**
 ```bash
+sudo ip addr add 10.0.1.2/24 dev iron0
+sudo ip link set iron0 up
 sudo ./ironattack/ironattack vlan-hop --target 10.0.1.1 --target-vlan 20 --outer-vlan 1 --count 5
 ```
 
@@ -815,6 +821,157 @@ ironctl> show stats
 ```
 
 VLAN strict mode rejects ANY frame with TPID 0x8100 at the Ethernet header, preventing double-tagged VLAN hopping attacks at the earliest possible point in the pipeline.
+
+### TCP RST Injection Attack + Defense
+
+The `rst-inject` subcommand sends forged TCP RST packets to tear down established connections between a client and the router.
+
+**Terminal 1: Start router and establish a connection**
+```bash
+sudo ./ironstack/ironstack -d ../src/configs/router.conf
+```
+
+**Terminal 3: Establish a TCP connection to echo server**
+```bash
+sudo ip addr add 10.0.1.2/24 dev iron0
+sudo ip link set iron0 up
+nc 10.0.1.1 7
+
+# type something and press enter to establish the connection
+hello
+# Connection is now ESTABLISHED
+```
+
+**Terminal 1: Show TCP connection**
+```bash
+ironctl> show tcp
+[8814.886239] [INFO ] [TCP] --- TCP Connections (1 active) ---
+[8814.886296] [INFO ] [TCP]   10.0.1.2:40408 -> 10.0.1.1:7  state=ESTABLISHED
+ironctl> 
+```
+Please take the real source port **40408** to the next command
+
+**Terminal 2: Inject forged RST (without defense)**
+```bash
+sudo ip addr add 10.0.1.2/24 dev iron0
+sudo ip link set iron0 up
+sudo ./ironattack/ironattack rst-inject --target 10.0.1.1 --port 7 --src 10.0.1.2 --sport <PORT_FROM_SHOW_TCP> --seq 1000 --count 10
+
+# Example
+sudo ./ironattack/ironattack rst-inject --target 10.0.1.1 --port 7 --src 10.0.1.2 --sport 40408 --seq 1000 --count 10
+```
+
+The source port **40408** is taken from the former command.
+
+Output:
+```
+=== TCP RST Injection ===
+  Target:  10.0.1.1:7
+  Spoof:   10.0.1.2:54321
+  Seq:     1000
+  Count:   10
+
+  Sent: 10 RST packets
+```
+
+**Terminal 1: Connection killed (without defense)**
+```
+[DEBUG] [TCP] RST received, closing connection
+
+# Connection gone!
+ironctl> show tcp
+[9158.657687] [INFO ] [TCP] --- TCP Connections (0 active) ---
+```
+
+**Terminal 1: Enable RST validation defense**
+```
+ironctl> defense rst-validation enable
+[INFO ] [DEFENSE] Defense 'rst-validation' ENABLED
+```
+
+**Terminal 2: Inject RST again (with defense)**
+```bash
+sudo ./ironattack/ironattack rst-inject --target 10.0.1.1 --port 7 --src 10.0.1.2 --sport 40408 --seq 9999 --count 10
+```
+
+**Terminal 1: RSTs rejected — connection survives**
+```
+[DEBUG] [TCP] RST validation: rejected (seq=9999, expected=102)
+[DEBUG] [TCP] RST validation: rejected (seq=10000, expected=102)
+...
+
+ironctl> show tcp
+# Connection still ESTABLISHED!
+```
+
+RST validation only accepts RST if the sequence number exactly matches the expected `rcv_nxt`. Blind RST injection (where the attacker guesses seq numbers) is blocked.
+
+### IP Spoofing Attack + Defense
+
+The `ip-spoof` subcommand sends TCP SYN packets with a forged source IP to bypass source-based ACL rules.
+
+**Terminal 1: Start router**
+```bash
+sudo ./ironstack/ironstack -d ../src/configs/router.conf
+```
+
+**Terminal 2: Send spoofed packets (without defense)**
+```bash
+sudo ip addr add 10.0.1.2/24 dev iron0
+sudo ip link set iron0 up
+sudo ./ironattack/ironattack ip-spoof --src 10.0.99.1 --dst 10.0.1.1 --port 7 --count 5
+```
+
+Output:
+```
+=== IP Spoofing Attack ===
+  Spoofed src: 10.0.99.1
+  Target:      10.0.1.1:7
+  Count:       5
+
+  Sent: 5 spoofed SYN packets
+```
+
+**Terminal 1: Without defense, spoofed packets accepted**
+```
+[DEBUG] [TCP] New connection: SYN_RECV (port XXXXX -> 7)
+# Connections created from fake source 10.0.99.1
+
+ironctl> show tcp
+# 5 connections from 10.0.99.1 in SYN_RECV state
+```
+
+**Terminal 1: Flush old connections, then enable uRPF defense**
+```
+ironctl> tcp flush
+TCP connections flushed.
+
+ironctl> defense urpf enable
+[INFO ] [DEFENSE] Defense 'urpf' ENABLED
+```
+
+**Terminal 2: Send spoofed packets again (with defense)**
+```bash
+sudo ./ironattack/ironattack ip-spoof --src 10.0.99.1 --dst 10.0.1.1 --port 7 --count 5
+```
+
+**Terminal 1: Spoofed packets dropped**
+```
+[WARN ] [IP] uRPF: no route for src 0A006301, dropping
+[WARN ] [IP] uRPF: no route for src 0A006301, dropping
+...
+# No connections created — spoofed source rejected
+
+ironctl> show tcp
+[INFO ] [TCP] --- TCP Connections (0 active) ---
+
+ironctl> show stats
+# l3.drops.invalid counter increased
+```
+
+uRPF strict mode: if there's no route for the source IP at all, the packet is dropped. If a route exists but points to a different interface than where the packet arrived, it's also dropped.
+
+The `tcp flush` command clears stale connections from previous tests.
 
 ### Audit log file
 

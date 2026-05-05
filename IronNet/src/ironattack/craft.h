@@ -15,6 +15,13 @@ int craft_tcp_syn(uint8_t *buf, int buf_len,
                   uint16_t src_port, uint16_t dst_port,
                   uint32_t seq);
 
+/* Build a TCP RST frame */
+int craft_tcp_rst(uint8_t *buf, int buf_len,
+                  const uint8_t *src_mac, const uint8_t *dst_mac,
+                  uint32_t src_ip, uint32_t dst_ip,
+                  uint16_t src_port, uint16_t dst_port,
+                  uint32_t seq);
+
 /* Build an ARP reply frame */
 int craft_arp_reply(uint8_t *buf, int buf_len,
                     const uint8_t *src_mac, const uint8_t *dst_mac,
