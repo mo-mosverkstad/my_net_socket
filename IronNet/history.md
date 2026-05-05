@@ -3346,3 +3346,63 @@ After Phase 14b:
 - **18 unit tests + 11 module tests = 29 tests, all passing**
 - ironsim supports 2-node and 3-node topologies with link impairments
 - All nodes reachable, delay/loss verified, clean shutdown confirmed
+
+---
+
+## Phase 14c: Traffic Generation + Reporting (ironsim-test)
+
+### What was done
+
+Created `ironsim-test` — a traffic generator and report tool that tests connectivity, measures latency/loss, and checks TCP port availability across a running ironsim topology.
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironsim/test_traffic.c` | ironsim-test binary: ping tests, TCP connect tests, formatted report |
+| `demos/demo.20.ironsim-test.md` | Full demo walkthrough |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironsim/CMakeLists.txt` | Added ironsim-test binary |
+
+### Usage
+
+```bash
+# Test all 3-node topology IPs with 10 pings + TCP port 7
+sudo ./ironsim/ironsim-test --all --count 10 --tcp 7
+
+# Test specific target
+sudo ./ironsim/ironsim-test --target 10.0.2.1 --count 20 --tcp 8080
+```
+
+### Verified results (3-node topology with 5ms/10ms delay)
+
+```
+  Target            Sent  Recv  Loss%  Min(ms)  Avg(ms)  Max(ms)  TCP/7
+  10.0.1.1            10    10   0.0%     5.3ms     6.5ms    12.6ms  OPEN
+  10.0.1.254          10    10   0.0%     5.2ms     6.2ms    11.5ms  OPEN
+  10.0.2.254          10    10   0.0%    10.2ms    11.6ms    20.9ms  OPEN
+  10.0.2.1            10    10   0.0%    10.2ms    12.0ms    21.9ms  OPEN
+
+  Summary: 4 targets, 40/40 packets received (0.0% overall loss)
+```
+
+### Phase 14 complete
+
+All 3 sub-phases of Phase 14 are now done:
+
+| Sub-phase | Component | Status |
+|-----------|-----------|--------|
+| 14a | 2-node topology | ✅ |
+| 14b | 3-node + link impairments (tc netem) | ✅ |
+| 14c | Traffic generation + report | ✅ |
+
+### Current test summary
+
+After Phase 14c:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- ironsim: 2-node and 3-node topologies with delay/loss
+- ironsim-test: automated ping + TCP report with latency/loss metrics

@@ -277,6 +277,7 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | ironprobe-ext | `build/ironprobe_ext/ironprobe-ext` | Binary | External real SYN scanner via raw socket |
 | ironreport | `build/ironprobe_ext/ironreport` | Binary | Automated attack-defense report (5 test pairs) |
 | ironsim | `build/ironsim/ironsim` | Binary | Network emulator (multi-node topology with link impairments) |
+| ironsim-test | `build/ironsim/ironsim-test` | Binary | Traffic generator and topology test report |
 
 ---
 

@@ -25,6 +25,7 @@ All demos are in the `demos/` folder. Each file is fully self-contained — it i
 | [demo.17.attack-defense-report.md](demos/demo.17.attack-defense-report.md) | Phase 13e | Automated attack-defense test report |
 | [demo.18.ironsim-2node.md](demos/demo.18.ironsim-2node.md) | Phase 14a | ironsim 2-node topology emulator |
 | [demo.19.ironsim-3node.md](demos/demo.19.ironsim-3node.md) | Phase 14b | ironsim 3-node topology with link impairments |
+| [demo.20.ironsim-test.md](demos/demo.20.ironsim-test.md) | Phase 14c | Traffic generator and topology test report |
 
 ## Quick Build Reference
 
