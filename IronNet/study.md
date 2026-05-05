@@ -1489,7 +1489,7 @@ Each ironstack instance runs as a separate process with its own TAP interfaces a
 
 ---
 
-## Phase 15: Packet Tools — irontrace (Week 39–40)
+## Phase 15: Packet Tools — irontrace (Week 43–44)
 
 ### Goals
 - Capture packets at any pipeline stage
@@ -1500,6 +1500,503 @@ Each ironstack instance runs as a separate process with its own TAP interfaces a
 1. **Capture** — hook at L2/L3/L4 boundaries, write to file
 2. **Replay** — read capture file, inject into stack
 3. **Regression workflow** — capture failure → fix → replay → verify
+
+---
+
+## Phase 16: Man-in-the-Middle (MITM) (Week 45–47)
+
+This phase is split into 3 sub-phases.
+
+### Goals
+- Demonstrate full MITM attack: intercept, inspect, modify, and forward traffic
+- Show why encryption is essential for network security
+- Build detection mechanisms for MITM attacks
+
+### Architecture
+
+```
+Victim A (10.0.1.1)  ←→  Attacker (MITM relay)  ←→  Victim B / Server (10.0.2.1)
+                          ↓
+                     Logs all traffic
+                     Can modify in transit
+```
+
+---
+
+### Phase 16a: MITM Relay Engine (Week 45)
+
+#### Goals
+- Build a relay mode in ironattack that intercepts traffic between two hosts
+- Combine ARP spoofing + packet forwarding
+
+#### Tasks
+
+1. **ARP poisoning both directions**
+   - Tell A: "B is at attacker MAC"
+   - Tell B: "A is at attacker MAC"
+   - Both victims send traffic to attacker
+
+2. **Relay engine (`ironattack/mitm_relay.c`)**
+   - Receive packets from A destined for B
+   - Log packet contents (src, dst, protocol, payload preview)
+   - Forward to real B (rewrite MAC, keep IP intact)
+   - Same in reverse direction
+   - Transparent to both endpoints
+
+3. **CLI command**
+   ```bash
+   sudo ./ironattack mitm --victim-a 10.0.1.1 --victim-b 10.0.2.1 --iface iron0
+   ```
+
+4. **Validation**
+   - A pings B → attacker sees and forwards ping → B responds → attacker sees reply
+   - A connects to B's echo server → attacker logs all data in transit
+   - Neither A nor B detects the interception
+
+---
+
+### Phase 16b: Traffic Modification (Week 46)
+
+#### Goals
+- Modify packets in transit (inject, alter, drop selectively)
+- Demonstrate data integrity attacks
+
+#### Tasks
+
+1. **Modification rules**
+   - Replace: swap specific bytes in payload (e.g., change "OK" to "NO")
+   - Inject: add extra data to HTTP responses
+   - Drop: selectively drop packets matching criteria
+   - Delay: hold packets to cause timeouts
+
+2. **Rule configuration**
+   ```bash
+   sudo ./ironattack mitm --victim-a 10.0.1.1 --victim-b 10.0.2.1 \
+       --modify "replace:OK:FAIL" --log /tmp/mitm.log
+   ```
+
+3. **Validation**
+   - KV store: `SET foo bar` → attacker changes to `SET foo HACKED`
+   - HTTP: inject JavaScript into response body
+   - Echo: modify echoed data (client sends "hello", receives "XXXXX")
+
+---
+
+### Phase 16c: MITM Detection (Week 47)
+
+#### Goals
+- Build detection mechanisms into ironstack
+- Alert when MITM indicators are present
+
+#### Tasks
+
+1. **ARP anomaly detection (enhanced)**
+   - Detect rapid ARP changes (MAC flapping)
+   - Detect duplicate IP with different MACs
+   - Alert: "Possible MITM: IP 10.0.1.1 MAC changed 3 times in 10 seconds"
+
+2. **Traffic analysis**
+   - Detect unexpected latency increase (relay adds delay)
+   - Detect TTL anomalies (relay may not decrement TTL correctly)
+   - Detect duplicate packets (relay forwarding artifacts)
+
+3. **Defense: encrypted channels**
+   - Demonstrate that IPsec-protected traffic is opaque to MITM
+   - Attacker sees encrypted bytes, cannot modify without detection
+
+4. **Validation**
+   - MITM active → detection alerts fire
+   - MITM active + IPsec → attacker sees only encrypted data
+
+---
+
+### Phase 16 Sub-phase Summary
+
+| Sub-phase | Component | Week | Output |
+|-----------|-----------|------|--------|
+| 16a | MITM relay engine | Week 45 | Transparent interception + logging |
+| 16b | Traffic modification | Week 46 | In-transit data alteration |
+| 16c | MITM detection | Week 47 | Anomaly alerts + encryption defense |
+
+---
+
+## Phase 17: DNS Poisoning & Hijacking (Week 48–50)
+
+This phase is split into 3 sub-phases.
+
+### Goals
+- Demonstrate DNS cache poisoning and response spoofing
+- Redirect victims to attacker-controlled IPs
+- Build DNS security mechanisms (validation, DNSSEC-lite)
+
+### Architecture
+
+```
+Client → DNS query → ironstack DNS server (port 53)
+                          ↑
+              Attacker races to respond first
+              with forged DNS reply (wrong IP)
+```
+
+---
+
+### Phase 17a: DNS Response Spoofing (Week 48)
+
+#### Goals
+- Attacker sends forged DNS responses to redirect domains to attacker IP
+
+#### Tasks
+
+1. **DNS spoof attack (`ironattack/attack_dns_spoof.c`)**
+   ```bash
+   sudo ./ironattack dns-spoof --domain ironnet.local --fake-ip 10.0.99.1 \
+       --target 10.0.1.1 --iface iron0
+   ```
+   - Listen for DNS queries on the wire
+   - Race to respond before the real DNS server
+   - Forge response with attacker's IP for the queried domain
+
+2. **Standalone DNS poisoner**
+   - Continuously send unsolicited DNS responses
+   - Target: any client that queries `ironnet.local`
+   - Response: `ironnet.local → 10.0.99.1` (attacker IP)
+
+3. **Validation**
+   - Client queries `ironnet.local` → receives attacker's IP instead of real IP
+   - Client connects to the fake IP → traffic goes to attacker
+
+---
+
+### Phase 17b: DNS Cache Poisoning (Week 49)
+
+#### Goals
+- Poison the DNS server's cache (if caching is added)
+- Persistent redirection without continuous spoofing
+
+#### Tasks
+
+1. **Add DNS caching to dns_server.c**
+   - Cache resolved queries with TTL
+   - Subsequent queries served from cache
+
+2. **Cache poisoning attack**
+   - Send forged response with high TTL before real response arrives
+   - Poisoned entry persists in cache for TTL duration
+   - All subsequent clients get the poisoned answer
+
+3. **Transaction ID guessing**
+   - DNS uses 16-bit transaction ID for matching queries to responses
+   - Attacker brute-forces transaction IDs (65536 possibilities)
+   - Demonstrate: with weak randomization, poisoning succeeds quickly
+
+4. **Validation**
+   - Poison cache → all clients get wrong IP for N seconds (TTL)
+   - After TTL expires → correct answer returns
+
+---
+
+### Phase 17c: DNS Security (Week 50)
+
+#### Goals
+- Implement defenses against DNS poisoning
+
+#### Tasks
+
+1. **Source port randomization**
+   - Use random source port for outbound queries (not fixed port 53)
+   - Attacker must guess both transaction ID AND source port
+   - Reduces success probability from 1/65536 to 1/4 billion
+
+2. **Response validation**
+   - Verify response comes from expected server IP
+   - Verify transaction ID matches outstanding query
+   - Reject unsolicited responses
+
+3. **DNSSEC-lite (signature verification)**
+   - Add simple HMAC to DNS responses (shared secret between server and resolver)
+   - Forged responses without valid HMAC are rejected
+   - Demonstrates the principle of DNSSEC without full PKI
+
+4. **Validation**
+   - DNS spoof WITHOUT defenses: poisoning succeeds
+   - DNS spoof WITH source port randomization: poisoning fails (can't guess port)
+   - DNS spoof WITH HMAC: forged responses rejected
+
+---
+
+### Phase 17 Sub-phase Summary
+
+| Sub-phase | Component | Week | Output |
+|-----------|-----------|------|--------|
+| 17a | DNS response spoofing | Week 48 | Forged DNS replies redirect domains |
+| 17b | DNS cache poisoning | Week 49 | Persistent cache corruption |
+| 17c | DNS security defenses | Week 50 | Source port randomization + HMAC validation |
+
+---
+
+## Phase 18: Buffer Overflow Exploitation (Week 51–53)
+
+This phase is split into 3 sub-phases.
+
+### Goals
+- Demonstrate memory corruption vulnerabilities and exploitation
+- Show how ASAN detects these issues
+- Build exploit mitigations (stack canaries, bounds checking)
+
+### Architecture
+
+```
+Attacker → oversized input → vulnerable app server → stack overflow
+                                                      ↓
+                                              Control flow hijacked
+                                              (or ASAN catches it)
+```
+
+---
+
+### Phase 18a: Vulnerable Application (Week 51)
+
+#### Goals
+- Create an intentionally vulnerable app server for exploitation practice
+
+#### Tasks
+
+1. **Vulnerable server (`ironapps/vuln_server.c`, port 9999)**
+   - Uses `strcpy()` without bounds checking
+   - Fixed-size stack buffer (64 bytes)
+   - Reads user input directly into buffer
+   - Classic stack buffer overflow vulnerability
+
+2. **Vulnerability types**
+   - Stack buffer overflow: input > 64 bytes overwrites return address
+   - Format string: `printf(user_input)` without format specifier
+   - Integer overflow: length field wraps around, causes small allocation + large copy
+
+3. **Normal operation**
+   - Send < 64 bytes → server processes normally
+   - Send > 64 bytes → ASAN detects stack-buffer-overflow
+
+4. **Validation**
+   - Normal input: server responds correctly
+   - Oversized input: ASAN report printed, server crashes (detected)
+   - Without ASAN (Release build): undefined behavior / segfault
+
+---
+
+### Phase 18b: Exploit Development (Week 52)
+
+#### Goals
+- Write exploit payloads that trigger the vulnerability
+- Demonstrate control flow hijacking concepts
+
+#### Tasks
+
+1. **Crash PoC (proof of concept)**
+   ```bash
+   # Send 128 'A's to overflow the 64-byte buffer
+   python3 -c "print('A'*128)" | nc 10.0.1.1 9999
+   ```
+   - ASAN catches: `stack-buffer-overflow`
+   - Without ASAN: segfault at address 0x41414141
+
+2. **Pattern-based offset finding**
+   - Send cyclic pattern (e.g., "Aa0Aa1Aa2...")
+   - Identify exact offset where return address is overwritten
+   - Tool: `ironattack exploit --target 10.0.1.1 --port 9999 --pattern 128`
+
+3. **Payload crafting**
+   - Overwrite return address with known value
+   - Demonstrate: redirect execution to a different function
+   - In IronNet context: call `iron_request_shutdown()` to prove code execution
+
+4. **Validation**
+   - Pattern identifies offset = 72 (64 buffer + 8 saved RBP)
+   - Crafted payload overwrites return address → controlled crash
+   - ASAN always catches it in Debug builds (safety net)
+
+---
+
+### Phase 18c: Exploit Mitigations (Week 53)
+
+#### Goals
+- Implement and demonstrate common exploit mitigations
+
+#### Tasks
+
+1. **Stack canary**
+   - Place random value between buffer and return address
+   - Check canary before function returns
+   - If modified → abort (overflow detected)
+   - `defense stack-canary enable`
+
+2. **Bounds checking**
+   - Replace `strcpy` with `strncpy` (safe version)
+   - Validate input length before copy
+   - Reject inputs exceeding buffer size
+
+3. **ASLR simulation**
+   - Randomize buffer addresses between connections
+   - Attacker can't predict where to jump
+   - Demonstrate: same exploit fails with randomization
+
+4. **Comparison: with and without mitigations**
+   | Mitigation | Exploit result |
+   |-----------|----------------|
+   | None (Release build) | Segfault / code execution |
+   | ASAN (Debug build) | Detected + abort |
+   | Stack canary | Detected + abort |
+   | Bounds checking | Input rejected (no overflow) |
+   | ASLR | Exploit fails (wrong address) |
+
+5. **Validation**
+   - Same exploit payload tested against each mitigation
+   - Report: which mitigations prevent exploitation
+
+---
+
+### Phase 18 Sub-phase Summary
+
+| Sub-phase | Component | Week | Output |
+|-----------|-----------|------|--------|
+| 18a | Vulnerable application | Week 51 | Intentionally buggy server for practice |
+| 18b | Exploit development | Week 52 | Crash PoC, offset finding, payload crafting |
+| 18c | Exploit mitigations | Week 53 | Stack canary, bounds check, ASLR simulation |
+
+---
+
+## Phase 19: Covert Channels & Traffic Analysis (Week 54–56)
+
+This phase is split into 3 sub-phases.
+
+### Goals
+- Hide data within normal-looking network traffic
+- Demonstrate steganographic communication techniques
+- Build detection mechanisms for covert channels
+
+### Architecture
+
+```
+Sender (covert)  ──hidden data──→  Receiver (covert)
+       ↓                                    ↑
+  Encodes data in:                    Decodes from:
+  - ICMP payload                      - ICMP payload
+  - TCP sequence numbers              - TCP sequence numbers
+  - DNS TXT records                   - DNS TXT records
+  - Packet timing                     - Packet timing
+```
+
+---
+
+### Phase 19a: Data Hiding in Protocol Fields (Week 54)
+
+#### Goals
+- Encode secret messages in protocol fields that are normally ignored
+
+#### Tasks
+
+1. **ICMP covert channel**
+   - Encode data in ICMP echo request payload (normally random/zero)
+   - Sender: `ironattack covert-icmp --target 10.0.1.1 --message "secret"`
+   - Receiver: extract message from ICMP payload
+   - Looks like normal ping traffic to observers
+
+2. **TCP ISN (Initial Sequence Number) channel**
+   - Encode 32 bits of data per connection in the ISN
+   - Sender opens connections with crafted sequence numbers
+   - Receiver decodes ISN values to reconstruct message
+   - Each SYN carries 4 bytes of hidden data
+
+3. **DNS TXT record channel**
+   - Encode data as base64 in DNS TXT queries
+   - Query: `c2VjcmV0.covert.ironnet.local` (base64 of "secret")
+   - DNS server decodes and stores the message
+   - Looks like normal DNS traffic
+
+4. **Validation**
+   - Send hidden message via each channel
+   - Receiver correctly decodes the message
+   - Normal traffic inspection (tcpdump) doesn't reveal the secret
+
+---
+
+### Phase 19b: Timing-Based Covert Channels (Week 55)
+
+#### Goals
+- Encode data in packet timing (inter-packet delays)
+
+#### Tasks
+
+1. **Timing channel encoder**
+   - Bit 1: send packet after 100ms delay
+   - Bit 0: send packet after 10ms delay
+   - Receiver measures inter-packet gaps to decode bits
+   - Bandwidth: ~10 bits/second (slow but stealthy)
+
+2. **Packet counting channel**
+   - Encode data in the number of packets per time window
+   - 1-5 packets = bit 0, 6-10 packets = bit 1
+   - Even harder to detect than timing
+
+3. **Storage channel (IP ID field)**
+   - IP identification field is 16 bits, often sequential
+   - Encode data by manipulating the ID increment pattern
+   - Receiver observes ID values to extract hidden bits
+
+4. **Validation**
+   - Timing channel: message transmitted at ~10 bps
+   - Packet counting: message transmitted at ~1 bps
+   - Both channels invisible to simple packet inspection
+
+---
+
+### Phase 19c: Covert Channel Detection (Week 56)
+
+#### Goals
+- Build anomaly detectors that identify covert channel usage
+
+#### Tasks
+
+1. **ICMP payload analysis**
+   - Normal ping: payload is pattern (0x00-0xFF repeating)
+   - Covert: payload has high entropy (random-looking data)
+   - Detector: flag ICMP packets with entropy > threshold
+
+2. **Timing analysis**
+   - Normal traffic: variable inter-packet gaps
+   - Covert timing: bimodal distribution (10ms or 100ms)
+   - Detector: statistical test for bimodal timing patterns
+
+3. **TCP ISN analysis**
+   - Normal: ISN is random (high entropy, no pattern)
+   - Covert: ISN encodes data (may have structure)
+   - Detector: check ISN randomness quality
+
+4. **DNS query analysis**
+   - Normal: queries for known domains
+   - Covert: queries contain base64 data in subdomains
+   - Detector: flag queries with high-entropy labels
+
+5. **Defense integration**
+   ```
+   ironctl> defense covert-detect enable
+   ```
+   - Monitors all traffic for covert channel indicators
+   - Audit log: `AUDIT_COVERT_CHANNEL` events
+
+6. **Validation**
+   - Covert channel active → detector fires alert
+   - Normal traffic → no false positives
+   - Report: detection rate vs false positive rate
+
+---
+
+### Phase 19 Sub-phase Summary
+
+| Sub-phase | Component | Week | Output |
+|-----------|-----------|------|--------|
+| 19a | Data hiding (ICMP, TCP ISN, DNS) | Week 54 | 3 covert channel implementations |
+| 19b | Timing-based channels | Week 55 | Timing + packet counting channels |
+| 19c | Covert channel detection | Week 56 | Anomaly detectors + defense integration |
 
 ---
 
@@ -1592,10 +2089,14 @@ Each ironstack instance runs as a separate process with its own TAP interfaces a
 | 11 | ironapps (socket API + target apps) | Week 25–28 |
 | 12 | ironfuzz / ironprobe / ironload | Week 29–34 |
 | 13 | Attack Simulation & Defense | Week 35–40 |
-| 14 | ironsim (emulator) | Week 41–42 |
+| 14 | ironsim (network emulator) | Week 41–42 |
 | 15 | irontrace (capture/replay) | Week 43–44 |
+| 16 | Man-in-the-Middle (MITM) | Week 45–47 |
+| 17 | DNS Poisoning & Hijacking | Week 48–50 |
+| 18 | Buffer Overflow Exploitation | Week 51–53 |
+| 19 | Covert Channels & Traffic Analysis | Week 54–56 |
 
-**Total estimated duration: ~10 months (part-time development)**
+**Total estimated duration: ~14 months (part-time development)**
 
 ---
 
