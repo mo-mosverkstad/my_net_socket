@@ -6,6 +6,7 @@
 #include "../l3/ip.h"
 #include "../security/defense.h"
 #include "../ironmon/audit.h"
+#include "../irontrace/trace.h"
 
 #include <string.h>
 
@@ -32,6 +33,9 @@ int eth_parse(const uint8_t *raw, int len, int iface_idx, eth_frame_t *frame) {
     frame->payload = (uint8_t *)(raw + ETH_HEADER_LEN);
     frame->payload_len = len - ETH_HEADER_LEN;
     frame->iface_idx = iface_idx;
+
+    /* Trace hook: L2 RX */
+    trace_capture(TRACE_L2, TRACE_DIR_RX, raw, len);
 
     uint16_t ethertype = iron_ntohs(frame->header->ethertype);
 

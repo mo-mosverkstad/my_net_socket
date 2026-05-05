@@ -19,6 +19,7 @@
 #include "../ironapps/http_server.h"
 #include "../ironapps/rpc_server.h"
 #include "../security/defense.h"
+#include "../irontrace/trace.h"
 
 #include <unistd.h>
 #include <time.h>
@@ -51,6 +52,7 @@ int iron_pipeline_init(void) {
     audit_init(AUDIT_DEFAULT_FILE);
     app_socket_init();
     defense_init();
+    trace_init();
     echo_server_start();
     dns_server_start();
     kv_server_start();

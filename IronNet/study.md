@@ -1499,6 +1499,15 @@ This phase is split into 3 sub-phases.
 - Replay captured traces for regression testing
 - Provide CLI commands for runtime capture control
 
+### Two modes of operation
+
+| Mode | How it works | Use case |
+|------|-------------|----------|
+| **Internal hooks** | Callbacks inside ironstack pipeline at L2/L3/L4 boundaries | See packets at each processing stage (before/after ACL, routing, etc.) |
+| **External capture** | irontrace-replay binary reads/writes via TAP raw socket | Like tcpdump — observe and replay traffic from outside |
+
+Internal hooks capture packets as they flow through the pipeline — you can see what happens at each layer. External replay injects real packets into the TAP device for realistic regression testing.
+
 ### Architecture
 
 ```

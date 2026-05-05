@@ -10,6 +10,7 @@
 #include "../l2/arp.h"
 #include "../security/defense.h"
 #include "../ironmon/audit.h"
+#include "../irontrace/trace.h"
 #include "log.h"
 #include "stats.h"
 #include "utils.h"
@@ -62,6 +63,9 @@ int ip_input(uint8_t *data, int len, int iface_idx) {
 
     uint8_t *payload = data + hdr_len;
     int payload_len = iron_ntohs(hdr->total_len) - hdr_len;
+
+    /* Trace hook: L3 RX */
+    trace_capture(TRACE_L3, TRACE_DIR_RX, data, len);
 
     /* Fragment reassembly */
     uint16_t flags_frag = iron_ntohs(hdr->flags_frag);
@@ -236,6 +240,9 @@ int ip_output(uint32_t src_ip, uint32_t dst_ip, uint8_t protocol,
 
     vnic_write(out_iface, frame_buf, frame_len);
     iron_stats_increment(STAT_L3_TX_PACKETS);
+
+    /* Trace hook: L3 TX */
+    trace_capture(TRACE_L3, TRACE_DIR_TX, pkt, ip_total);
 
     return 0;
 }

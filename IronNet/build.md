@@ -101,6 +101,9 @@ defense rate-limit <N>/s            - Set per-source SYN rate limit
 defense conn-timeout <secs>            - Set idle connection timeout
 defense show                        - Show all defense states
 tcp flush                           - Clear all TCP connections
+trace start <file> [l2|l3|l4|all]   - Start packet capture to pcap file
+trace stop                          - Stop capture
+trace status                        - Show capture state
 help                    - Show this help
 exit                    - Stop the router
 ```
@@ -278,6 +281,7 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | ironreport | `build/ironprobe_ext/ironreport` | Binary | Automated attack-defense report (5 test pairs) |
 | ironsim | `build/ironsim/ironsim` | Binary | Network emulator (multi-node topology with link impairments) |
 | ironsim-test | `build/ironsim/ironsim-test` | Binary | Traffic generator and topology test report |
+| libiron_trace.a | `build/irontrace/libiron_trace.a` | Library | Packet capture (pcap writer + pipeline hooks) |
 
 ---
 

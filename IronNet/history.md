@@ -3406,3 +3406,60 @@ After Phase 14c:
 - **18 unit tests + 11 module tests = 29 tests, all passing**
 - ironsim: 2-node and 3-node topologies with delay/loss
 - ironsim-test: automated ping + TCP report with latency/loss metrics
+
+---
+
+## Phase 15a: Packet Capture — Pipeline Hooks + pcap Writer (irontrace)
+
+### What was done
+
+Implemented the irontrace packet capture module with:
+1. **Trace hooks** at L2 (eth.c), L3 (ip.c), and L4 (tcp.c) pipeline boundaries
+2. **pcap file writer** — Wireshark-compatible capture format
+3. **CLI commands** — `trace start`, `trace stop`, `trace status`
+4. **Runtime control** — enable/disable per layer (L2/L3/L4/all)
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `irontrace/trace.h` | Trace API: layer flags, direction enum, start/stop/capture |
+| `irontrace/trace.c` | pcap writer, capture function, status reporting |
+| `irontrace/CMakeLists.txt` | Builds libiron_trace.a |
+| `tests/stubs/trace_stub.c` | No-op trace stubs for unit/module tests |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironstack/l2/eth.c` | Added L2 RX trace hook after parse |
+| `ironstack/l3/ip.c` | Added L3 RX hook after validation, L3 TX hook after send |
+| `ironstack/l4/tcp.c` | Added L4 RX hook before flag validation |
+| `ironstack/core/pipeline.c` | Added `trace_init()` call |
+| `ironstack/CMakeLists.txt` | Linked `iron_trace` |
+| `ironctl/cli.c` | Added `trace start/stop/status` commands |
+| `src/CMakeLists.txt` | Added `irontrace` subdirectory |
+| `tests/CMakeLists.txt` | Added `trace_stub.c` to 6 tests |
+| `ironprobe_ext/report.c` | Added trace stub |
+
+### CLI commands
+
+```
+ironctl> trace start /tmp/capture.pcap all    — capture all layers
+ironctl> trace start /tmp/l3.pcap l3          — capture L3 only
+ironctl> trace stop                            — stop and close file
+ironctl> trace status                          — show state
+```
+
+### pcap format
+
+- Global header: magic=0xA1B2C3D4, version=2.4, snaplen=65535, linktype=1 (Ethernet)
+- Per-packet: timestamp + captured_len + data
+- Opens in Wireshark
+
+### Current test summary
+
+After Phase 15a:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- Trace hooks at L2/L3/L4 boundaries
+- pcap file output verified via CLI

@@ -19,6 +19,7 @@
 #include "../ironfuzz/fuzz.h"
 #include "../ironload/load.h"
 #include "../ironstack/security/defense.h"
+#include "../irontrace/trace.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -375,6 +376,27 @@ int cli_execute(const char *line) {
             audit_disable();
         } else {
             printf("Usage: audit <enable|disable>\n");
+        }
+    } else if (strcmp(argv[0], "trace") == 0) {
+        if (argc < 2) {
+            printf("Usage: trace <start|stop|status> ...\n");
+        } else if (strcmp(argv[1], "start") == 0) {
+            const char *file = (argc >= 3) ? argv[2] : "/tmp/irontrace.pcap";
+            int mask = TRACE_ALL;
+            if (argc >= 4) {
+                mask = 0;
+                if (strcmp(argv[3], "l2") == 0) mask = TRACE_L2;
+                else if (strcmp(argv[3], "l3") == 0) mask = TRACE_L3;
+                else if (strcmp(argv[3], "l4") == 0) mask = TRACE_L4;
+                else mask = TRACE_ALL;
+            }
+            trace_start(file, mask);
+        } else if (strcmp(argv[1], "stop") == 0) {
+            trace_stop();
+        } else if (strcmp(argv[1], "status") == 0) {
+            trace_status();
+        } else {
+            printf("Usage: trace <start [file] [l2|l3|l4|all]|stop|status>\n");
         }
     } else if (strcmp(argv[0], "tcp") == 0) {
         if (argc >= 2 && strcmp(argv[1], "flush") == 0) {

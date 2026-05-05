@@ -26,6 +26,14 @@ void audit_log_event(audit_event_type_t t, uint32_t a, uint32_t b, uint8_t c,
 }
 void audit_enable(void) {}
 void audit_disable(void) {}
+
+/* Trace stub */
+#include "../irontrace/trace.h"
+void trace_capture(int l, trace_dir_t d, const uint8_t *data, int len) {
+    (void)l;(void)d;(void)data;(void)len;
+}
+int trace_init(void) { return 0; }
+bool trace_is_active(void) { return false; }
 #include "../ironstack/core/iface.h"
 iface_config_t *iface_get(int i) { (void)i; return NULL; }
 bool iface_is_local_ip(uint32_t ip) { (void)ip; return false; }

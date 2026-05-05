@@ -5,6 +5,7 @@
 #include "../ironapps/app_socket.h"
 #include "../l3/ip.h"
 #include "../security/defense.h"
+#include "../irontrace/trace.h"
 
 #include <string.h>
 #include <time.h>
@@ -154,6 +155,9 @@ int tcp_input(uint32_t src_ip, uint32_t dst_ip,
     uint32_t seq = iron_ntohl(hdr->seq);
     uint32_t ack = iron_ntohl(hdr->ack);
     uint8_t flags = hdr->flags;
+
+    /* Trace hook: L4 RX */
+    trace_capture(TRACE_L4, TRACE_DIR_RX, data, len);
 
     /* Validate flags */
     if (!tcp_is_valid_flags(flags)) {
