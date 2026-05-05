@@ -77,6 +77,10 @@ static void cmd_help(void) {
     printf("  acl-check <ip>          - Validate ACL enforcement\n");
     printf("  fuzz <tcp|dns|http|rpc> <iterations> - Fuzz a target\n");
     printf("  load <tcp|route|acl|bw> [count]       - Stress test\n");
+    printf("  trace start <file> [l2|l3|l4|all]     - Start packet capture\n");
+    printf("  trace stop                            - Stop capture\n");
+    printf("  trace replay <file>                   - Replay pcap file\n");
+    printf("  trace status                          - Show capture state\n");
     printf("  defense <name> <enable|disable>        - Toggle defense\n");
     printf("  defense rate-limit <N>/s               - Set rate limit\n");
     printf("  defense conn-timeout <secs>            - Set idle connection timeout\n");

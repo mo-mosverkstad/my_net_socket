@@ -3534,3 +3534,45 @@ After Phase 15b:
 - Internal replay: all packets injected via vnic_inject()
 
 Phase 15 is now complete (15a capture + 15b replay + CLI integration).
+
+---
+
+## Phase 15c: CLI Integration + Regression Workflow
+
+### What was done
+
+1. Added `trace` commands to CLI help text (was missing)
+2. Created comprehensive regression workflow demo (demo.23)
+3. Documented when to use internal vs external replay
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironctl/cli.c` | Added trace start/stop/replay/status to `cmd_help()` output |
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `demos/demo.23.regression-workflow.md` | Full regression workflow: capture → analyze → fix → replay → verify |
+
+### Phase 15 complete
+
+All 3 sub-phases of Phase 15 are now done:
+
+| Sub-phase | Component | Status |
+|-----------|-----------|--------|
+| 15a | Pipeline hooks + pcap writer | ✅ |
+| 15b | pcap reader + packet injection | ✅ |
+| 15c | CLI integration + regression workflow | ✅ |
+
+### Current test summary
+
+After Phase 15 (complete):
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- Trace CLI: start/stop/status/replay all working and in help text
+- irontrace-replay binary: external replay via raw IP socket
+- Internal replay: full bidirectional via vnic_inject()
+- pcap files compatible with tcpdump and Wireshark
+- Regression workflow documented with examples
