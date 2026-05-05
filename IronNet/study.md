@@ -1491,15 +1491,179 @@ Each ironstack instance runs as a separate process with its own TAP interfaces a
 
 ## Phase 15: Packet Tools — irontrace (Week 43–44)
 
+This phase is split into 3 sub-phases.
+
 ### Goals
-- Capture packets at any pipeline stage
+- Capture packets at any pipeline stage (L2/L3/L4)
+- Write captures in pcap format (compatible with Wireshark)
 - Replay captured traces for regression testing
+- Provide CLI commands for runtime capture control
 
-### Tasks
+### Architecture
 
-1. **Capture** — hook at L2/L3/L4 boundaries, write to file
-2. **Replay** — read capture file, inject into stack
-3. **Regression workflow** — capture failure → fix → replay → verify
+```
+ironstack pipeline
+  |
+  +-- eth_parse() ──→ trace hook (L2 RX)
+  +-- eth_build() ──→ trace hook (L2 TX)
+  +-- ip_input()  ──→ trace hook (L3 RX)
+  +-- ip_output() ──→ trace hook (L3 TX)
+  +-- tcp_input() ──→ trace hook (L4 RX)
+  |
+  v
+irontrace module
+  |
+  +-- trace_capture(layer, direction, data, len)
+  +-- writes to pcap file: /tmp/irontrace.pcap
+
+irontrace-replay (separate binary)
+  |
+  +-- reads pcap file
+  +-- injects packets via raw socket or vnic_inject()
+```
+
+### Design decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Capture format | pcap (libpcap-compatible) | Opens in Wireshark, industry standard |
+| Hook mechanism | Runtime enable/disable via CLI | No recompile needed, selective capture |
+| Replay injection | Raw socket (external) + vnic_inject (internal) | Both realistic and fast modes |
+| Storage | File-based (/tmp/irontrace.pcap) | Persistent, can be large, no memory limit |
+| Filtering | Per-layer enable (L2/L3/L4/all) | Simple, covers common use cases |
+
+---
+
+### Phase 15a: Capture — Pipeline Hooks + pcap Writer (Week 43)
+
+#### Goals
+- Add trace hooks at L2/L3/L4 boundaries in the pipeline
+- Write captured packets to pcap file format
+- CLI commands to start/stop capture
+
+#### Tasks
+
+1. **Trace module (`irontrace/trace.h`, `trace.c`)**
+   - `trace_init()` — initialize trace subsystem
+   - `trace_start(filename, layers)` — begin capture to file
+   - `trace_stop()` — stop capture, close file
+   - `trace_capture(layer, direction, data, len)` — called from hooks
+   - `trace_status()` — print current state (enabled, file, packet count)
+   - Layer flags: `TRACE_L2`, `TRACE_L3`, `TRACE_L4`, `TRACE_ALL`
+
+2. **pcap file format writer**
+   - Global header (24 bytes): magic=0xA1B2C3D4, version=2.4, snaplen=65535, linktype=1 (Ethernet)
+   - Per-packet header (16 bytes): timestamp_sec, timestamp_usec, captured_len, original_len
+   - Packet data: raw bytes as seen at the hook point
+
+3. **Pipeline hooks**
+   - `eth.c` — after `eth_parse()` succeeds: `trace_capture(TRACE_L2, DIR_RX, raw, len)`
+   - `eth.c` — in `eth_build()` output: `trace_capture(TRACE_L2, DIR_TX, out_buf, total)`
+   - `ip.c` — in `ip_input()` after validation: `trace_capture(TRACE_L3, DIR_RX, data, len)`
+   - `ip.c` — in `ip_output()` before send: `trace_capture(TRACE_L3, DIR_TX, pkt, total)`
+   - `tcp.c` — in `tcp_input()`: `trace_capture(TRACE_L4, DIR_RX, data, len)`
+
+4. **CLI commands**
+   ```
+   ironctl> trace start /tmp/capture.pcap all
+   ironctl> trace start /tmp/l3only.pcap l3
+   ironctl> trace stop
+   ironctl> trace status
+   ```
+
+5. **Validation**
+   - Start capture, ping router, stop capture
+   - Open pcap file in Wireshark — verify ICMP packets visible
+   - Verify packet count matches expected
+
+---
+
+### Phase 15b: Replay — pcap Reader + Packet Injection (Week 43–44)
+
+#### Goals
+- Read pcap files and inject packets back into the stack
+- Support both internal (fast) and external (realistic) replay modes
+
+#### Tasks
+
+1. **irontrace-replay binary (`irontrace/replay.c`)**
+   ```bash
+   sudo ./irontrace-replay --file /tmp/capture.pcap --iface iron0
+   sudo ./irontrace-replay --file /tmp/capture.pcap --fast
+   ```
+   - Read pcap global header, validate magic number
+   - Read packet headers + data sequentially
+   - External mode: send via raw socket to TAP interface
+   - Fast mode: inject as quickly as possible (no timing)
+   - Timed mode: preserve original inter-packet delays
+
+2. **Internal replay via CLI**
+   ```
+   ironctl> trace replay /tmp/capture.pcap
+   ```
+   - Reads pcap file, calls `vnic_inject()` for each packet
+   - Useful for regression testing without external binary
+
+3. **Replay statistics**
+   - Packets replayed, bytes sent, duration
+   - Errors (injection failures)
+
+4. **Validation**
+   - Capture traffic → replay → verify same counters/behavior
+   - Replay at max speed → verify no crashes (stress test)
+
+---
+
+### Phase 15c: CLI Integration + Regression Workflow (Week 44)
+
+#### Goals
+- Complete CLI integration for capture/replay
+- Document the regression testing workflow
+
+#### Tasks
+
+1. **Full CLI command set**
+   ```
+   ironctl> trace start <file> [l2|l3|l4|all]  — begin capture
+   ironctl> trace stop                          — stop capture
+   ironctl> trace status                        — show state
+   ironctl> trace replay <file>                 — replay internally
+   ```
+
+2. **Regression workflow**
+   ```
+   # Step 1: Capture the failing scenario
+   ironctl> trace start /tmp/bug123.pcap all
+   # ... reproduce the bug ...
+   ironctl> trace stop
+
+   # Step 2: Fix the bug in source code
+   # ... edit code, rebuild ...
+
+   # Step 3: Replay and verify fix
+   ironctl> trace replay /tmp/bug123.pcap
+   ironctl> show stats
+   # Verify: no crashes, correct counters
+   ```
+
+3. **Integration with ironsim**
+   - Capture traffic in a multi-node topology
+   - Replay against a single node for isolated debugging
+
+4. **Validation**
+   - Full regression cycle: capture → fix → replay → verify
+   - pcap file opens correctly in Wireshark
+   - Replay produces identical stats as original capture
+
+---
+
+### Phase 15 Sub-phase Summary
+
+| Sub-phase | Component | Week | Output |
+|-----------|-----------|------|--------|
+| 15a | Capture (hooks + pcap writer) | Week 43 | trace_capture() hooks, pcap file output |
+| 15b | Replay (pcap reader + injection) | Week 43–44 | irontrace-replay binary, CLI replay |
+| 15c | CLI + regression workflow | Week 44 | Full trace CLI, documented workflow |
 
 ---
 
