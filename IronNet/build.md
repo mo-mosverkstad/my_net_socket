@@ -103,6 +103,7 @@ defense show                        - Show all defense states
 tcp flush                           - Clear all TCP connections
 trace start <file> [l2|l3|l4|all]   - Start packet capture to pcap file
 trace stop                          - Stop capture
+trace replay <file>                 - Replay pcap file (internal injection)
 trace status                        - Show capture state
 help                    - Show this help
 exit                    - Stop the router
@@ -282,6 +283,7 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | ironsim | `build/ironsim/ironsim` | Binary | Network emulator (multi-node topology with link impairments) |
 | ironsim-test | `build/ironsim/ironsim-test` | Binary | Traffic generator and topology test report |
 | libiron_trace.a | `build/irontrace/libiron_trace.a` | Library | Packet capture (pcap writer + pipeline hooks) |
+| irontrace-replay | `build/irontrace/irontrace-replay` | Binary | Replay pcap captures into the network |
 
 ---
 

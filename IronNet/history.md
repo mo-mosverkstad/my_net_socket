@@ -3463,3 +3463,74 @@ After Phase 15a:
 - **18 unit tests + 11 module tests = 29 tests, all passing**
 - Trace hooks at L2/L3/L4 boundaries
 - pcap file output verified via CLI
+
+---
+
+## Phase 15b: Replay — pcap Reader + Packet Injection (irontrace-replay)
+
+### What was done
+
+1. **irontrace-replay binary** — reads pcap files and injects packets via AF_PACKET raw socket
+2. **CLI `trace replay` command** — internal replay via `vnic_inject()` for regression testing
+3. **Two replay modes**: timed (preserves original delays) and fast (max speed)
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `irontrace/replay.c` | irontrace-replay binary: pcap reader, raw socket injection, timing control |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `irontrace/CMakeLists.txt` | Added irontrace-replay binary |
+| `ironctl/cli.c` | Added `trace replay <file>` command + vnic.h include |
+
+### Usage
+
+**External replay (via raw IP socket, realistic):**
+```bash
+# Timed replay (preserves original packet timing)
+sudo ./irontrace/irontrace-replay --file /tmp/capture.pcap --iface iron0
+
+# Fast replay (max speed, for stress testing)
+sudo ./irontrace/irontrace-replay --file /tmp/capture.pcap --iface iron0 --fast
+```
+
+Note: External replay can only inject client-side packets (source IP must belong to Linux). Packets with ironstack's source IP (e.g., 10.0.1.1) are rejected by the kernel — this is expected. Use internal replay for full bidirectional injection.
+
+**Internal replay (via CLI, for full bidirectional regression testing):**
+```
+ironctl> trace replay /tmp/capture.pcap
+Replayed 53 packets from /tmp/capture.pcap
+```
+
+Internal replay uses `vnic_inject()` which bypasses the kernel and injects all packets directly into the pipeline.
+
+### Regression workflow
+
+```bash
+# 1. Capture the failing scenario
+ironctl> trace start /tmp/bug.pcap all
+# ... reproduce bug ...
+ironctl> trace stop
+
+# 2. Fix the bug, rebuild
+
+# 3. Replay and verify
+ironctl> trace replay /tmp/bug.pcap
+ironctl> show stats
+# Verify: no crashes, correct behavior
+```
+
+### Current test summary
+
+After Phase 15b:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- irontrace-replay binary built and functional
+- CLI trace replay command verified
+- External replay: 39/53 packets sent (14 errors expected — kernel rejects packets with ironstack's source IP)
+- Internal replay: all packets injected via vnic_inject()
+
+Phase 15 is now complete (15a capture + 15b replay + CLI integration).

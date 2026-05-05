@@ -20,6 +20,7 @@
 #include "../ironload/load.h"
 #include "../ironstack/security/defense.h"
 #include "../irontrace/trace.h"
+#include "../ironstack/io/vnic.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -393,6 +394,32 @@ int cli_execute(const char *line) {
             trace_start(file, mask);
         } else if (strcmp(argv[1], "stop") == 0) {
             trace_stop();
+        } else if (strcmp(argv[1], "replay") == 0) {
+            if (argc < 3) {
+                printf("Usage: trace replay <file>\n");
+            } else {
+                /* Internal replay: read pcap and inject via vnic */
+                FILE *fp = fopen(argv[2], "rb");
+                if (!fp) { printf("Cannot open: %s\n", argv[2]); }
+                else {
+                    uint8_t hdr_buf[24];
+                    if (fread(hdr_buf, 24, 1, fp) != 1) { printf("Bad pcap header\n"); fclose(fp); }
+                    else {
+                        uint8_t pkt[65535];
+                        uint8_t phdr_buf[16];
+                        int count = 0;
+                        while (fread(phdr_buf, 16, 1, fp) == 1) {
+                            uint32_t incl_len = *(uint32_t *)(phdr_buf + 8);
+                            if (incl_len > sizeof(pkt)) break;
+                            if (fread(pkt, 1, incl_len, fp) != incl_len) break;
+                            vnic_inject(0, pkt, incl_len);
+                            count++;
+                        }
+                        fclose(fp);
+                        printf("Replayed %d packets from %s\n", count, argv[2]);
+                    }
+                }
+            }
         } else if (strcmp(argv[1], "status") == 0) {
             trace_status();
         } else {

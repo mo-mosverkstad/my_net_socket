@@ -4,3 +4,6 @@ target_include_directories(iron_trace PUBLIC
     ${CMAKE_SOURCE_DIR}/common
 )
 target_link_libraries(iron_trace iron_common)
+
+add_executable(irontrace-replay replay.c)
+target_include_directories(irontrace-replay PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
