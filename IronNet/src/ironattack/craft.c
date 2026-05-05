@@ -245,6 +245,49 @@ int craft_ip_fragment(uint8_t *buf, int buf_len,
     return total;
 }
 
+int craft_icmp_redirect(uint8_t *buf, int buf_len,
+                        const uint8_t *src_mac, const uint8_t *dst_mac,
+                        uint32_t src_ip, uint32_t dst_ip,
+                        uint32_t new_gw, uint32_t orig_dst) {
+    /* Eth(14) + IP(20) + ICMP redirect(8) + embedded IP hdr(20) = 62 */
+    int total = ETH_HLEN + IP_HLEN + 8 + IP_HLEN;
+    if (buf_len < total) return -1;
+    memset(buf, 0, total);
+
+    memcpy(buf, dst_mac, 6);
+    memcpy(buf + 6, src_mac, 6);
+    buf[12] = 0x08; buf[13] = 0x00;
+
+    uint8_t *ip = buf + ETH_HLEN;
+    ip[0] = 0x45;
+    uint16_t ip_total = IP_HLEN + 8 + IP_HLEN;
+    ip[2] = (ip_total >> 8) & 0xFF; ip[3] = ip_total & 0xFF;
+    ip[8] = 64; ip[9] = 1; /* ICMP */
+    memcpy(ip + 12, &src_ip, 4);
+    memcpy(ip + 16, &dst_ip, 4);
+    uint16_t ck = ip_checksum(ip, IP_HLEN);
+    ip[10] = (ck >> 8) & 0xFF; ip[11] = ck & 0xFF;
+
+    /* ICMP redirect: type=5, code=1 (host redirect) */
+    uint8_t *icmp = ip + IP_HLEN;
+    icmp[0] = 5; icmp[1] = 1; /* type=5 redirect, code=1 host */
+    memcpy(icmp + 4, &new_gw, 4); /* new gateway */
+    /* Embedded original IP header pointing to orig_dst */
+    uint8_t *emb = icmp + 8;
+    emb[0] = 0x45; emb[8] = 64; emb[9] = 6;
+    uint16_t emb_total = 40; /* IP + TCP header */
+    emb[2] = (emb_total >> 8) & 0xFF; emb[3] = emb_total & 0xFF;
+    memcpy(emb + 12, &src_ip, 4);   /* src = original sender (router) */
+    memcpy(emb + 16, &orig_dst, 4); /* dst = original destination */
+    uint16_t eck = ip_checksum(emb, IP_HLEN);
+    emb[10] = (eck >> 8) & 0xFF; emb[11] = eck & 0xFF;
+    /* ICMP checksum over redirect header + embedded IP */
+    uint16_t ick = ip_checksum(icmp, 8 + IP_HLEN);
+    icmp[2] = (ick >> 8) & 0xFF; icmp[3] = ick & 0xFF;
+
+    return total;
+}
+
 int tap_open(const char *name) {
     /* Try raw IP socket first (packets go through kernel routing to TAP) */
     int fd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);

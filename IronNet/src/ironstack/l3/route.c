@@ -30,11 +30,11 @@ int route_add(ip_prefix_t prefix, uint32_t next_hop, int out_iface) {
     r->hit_count = 0;
     g_route_count++;
 
-    char buf[16];
+    char buf[16], buf2[16];
     LOG_INF(MODULE, "Route added: %s/%d via %s iface %d",
             iron_ip_to_str(prefix.addr, buf, sizeof(buf)),
             prefix.prefix_len,
-            iron_ip_to_str(next_hop, buf, sizeof(buf)),
+            iron_ip_to_str(next_hop, buf2, sizeof(buf2)),
             out_iface);
     return 0;
 }

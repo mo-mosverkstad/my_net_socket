@@ -43,6 +43,7 @@ int defense_init(void) {
     defense_find_or_create("urpf");
     defense_find_or_create("conn-timeout");
     defense_find_or_create("frag-strict");
+    defense_find_or_create("icmp-redirect-disable");
     LOG_INF(MODULE, "Defense module initialized (%d defenses registered)", g_defense_count);
     return 0;
 }

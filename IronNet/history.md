@@ -3161,3 +3161,71 @@ After Phase 13d:
 - **18 unit tests + 11 module tests = 29 tests, all passing**
 - ironattack binary has 7 subcommands: syn-flood, arp-spoof, vlan-hop, rst-inject, ip-spoof, slowloris, frag-attack
 - conn-timeout and frag-strict defenses integrated
+
+---
+
+## Phase 13e: ICMP Redirect + External Scanner + Reporting
+
+### What was done
+
+1. **ICMP redirect attack** — send fake ICMP redirect to manipulate the router's routing table
+2. **icmp-redirect-disable defense** — ignore ICMP redirect messages
+3. **ironprobe-ext** — separate binary that sends real TCP SYN packets via raw socket and listens for SYN+ACK responses
+4. **ironreport** — automated attack-defense report binary testing 5 attack/defense pairs
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironprobe_ext/main.c` | ironprobe-ext: real SYN scan via IPPROTO_RAW socket |
+| `ironprobe_ext/report.c` | ironreport: automated attack-defense test report |
+| `ironprobe_ext/CMakeLists.txt` | Builds both binaries |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironstack/l3/icmp.h` | Added ICMP_TYPE_REDIRECT and ICMP_REDIRECT_HOST constants |
+| `ironstack/l3/icmp.c` | Added ICMP redirect handling with icmp-redirect-disable defense |
+| `ironstack/security/defense.c` | Registered icmp-redirect-disable defense |
+| `ironattack/craft.h` | Added `craft_icmp_redirect()` declaration |
+| `ironattack/craft.c` | Implemented ICMP redirect frame construction |
+| `ironattack/main.c` | Added `icmp-redirect` subcommand |
+| `src/CMakeLists.txt` | Added `ironprobe_ext` subdirectory |
+
+### ironreport output
+
+```
+╔══════════════════════════════════════════════════════════════════════╗
+║           IronNet Attack-Defense Report                              ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+Attack                    Defense                Metric                         Baseline Mitigated Result
+SYN Flood                 SYN Cookies            connections in table                256         0   PASS
+SYN Flood (per-src)       Rate Limit (10/s)      connections from single src          50        10   PASS
+TCP RST Injection         RST Validation         connections killed by forged RST        1         0   PASS
+IP Spoofing               uRPF (strict)          spoofed connections accepted          1         0   PASS
+ACL Complexity (100 rules) N/A (correctness check) ACL still permits port 7              1         1   PASS
+
+  Result: 5/5 tests PASSED
+```
+
+### Phase 13 complete
+
+All 5 sub-phases of Phase 13 are now done:
+
+| Sub-phase | Component | Status |
+|-----------|-----------|--------|
+| 13a | SYN flood + SYN cookies/rate limit | ✅ |
+| 13b | ARP spoof/VLAN hop + ARP inspection/VLAN strict | ✅ |
+| 13c | RST inject/IP spoof + RST validation/uRPF | ✅ |
+| 13d | Slowloris/frag attack + conn-timeout/frag-strict | ✅ |
+| 13e | ICMP redirect + redirect disable + ironprobe-ext + ironreport | ✅ |
+
+### Current test summary
+
+After Phase 13e:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- ironattack binary has 8 subcommands: syn-flood, arp-spoof, vlan-hop, rst-inject, ip-spoof, slowloris, frag-attack, icmp-redirect
+- ironprobe-ext: real SYN scanner via raw socket
+- ironreport: automated 5-test attack-defense report (5/5 PASS)

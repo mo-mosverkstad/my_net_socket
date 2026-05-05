@@ -20,6 +20,9 @@ All demos are in the `demos/` folder. Each file is fully self-contained — it i
 | [demo.12.ip-spoof-attack.md](demos/demo.12.ip-spoof-attack.md) | Phase 13c | IP spoofing attack + uRPF defense |
 | [demo.13.slowloris-attack.md](demos/demo.13.slowloris-attack.md) | Phase 13d | Slowloris attack + connection idle timeout defense |
 | [demo.14.frag-attack.md](demos/demo.14.frag-attack.md) | Phase 13d | Fragmentation attack + frag-strict defense |
+| [demo.15.icmp-redirect-attack.md](demos/demo.15.icmp-redirect-attack.md) | Phase 13e | ICMP redirect attack + redirect disable defense |
+| [demo.16.external-scanner.md](demos/demo.16.external-scanner.md) | Phase 13e | ironprobe-ext real SYN scan via raw socket |
+| [demo.17.attack-defense-report.md](demos/demo.17.attack-defense-report.md) | Phase 13e | Automated attack-defense test report |
 
 ## Quick Build Reference
 
@@ -50,6 +53,7 @@ Commands:
   rst-inject --target <ip> --port <port> --src <ip> --sport <port> [--seq <n>] [--count <n>] [--iface <name>]
   slowloris  --target <ip> --port <port> [--conns <n>] [--iface <name>]
   frag-attack --target <ip> [--overlap] [--tiny] [--iface <name>] [--count <n>]
+  icmp-redirect --target <ip> --new-gw <ip> --orig-dst <ip> [--count <n>] [--iface <name>]
 ```
 
 ## Defense Commands
@@ -64,5 +68,6 @@ ironctl> defense rst-validation enable
 ironctl> defense urpf enable
 ironctl> defense conn-timeout 30
 ironctl> defense frag-strict enable
+ironctl> defense icmp-redirect-disable enable
 ironctl> tcp flush
 ```

@@ -5,8 +5,11 @@
 
 #define ICMP_TYPE_ECHO_REPLY   0
 #define ICMP_TYPE_DEST_UNREACH 3
+#define ICMP_TYPE_REDIRECT     5
 #define ICMP_TYPE_ECHO_REQUEST 8
 #define ICMP_TYPE_TIME_EXCEED  11
+
+#define ICMP_REDIRECT_HOST     1
 
 typedef struct __attribute__((packed)) {
     uint8_t  type;

@@ -3,7 +3,7 @@
 
 #include "types.h"
 
-#define DEFENSE_MAX         8
+#define DEFENSE_MAX         16
 #define DEFENSE_NAME_LEN    32
 #define RATE_LIMIT_BUCKETS  64
 #define RATE_LIMIT_DEFAULT  100  /* SYNs per second per source */
