@@ -122,7 +122,7 @@ target_include_directories(test_app_socket PRIVATE
 )
 target_link_libraries(test_app_socket iron_common)
 
-add_executable(test_dns unit/test_dns.c)
+add_executable(test_dns unit/test_dns.c stubs/defense_stub.c stubs/audit_stub.c)
 target_include_directories(test_dns PRIVATE
     ${CMAKE_SOURCE_DIR}/common
     ${CMAKE_SOURCE_DIR}/ironstack

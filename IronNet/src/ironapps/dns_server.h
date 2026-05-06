@@ -13,6 +13,7 @@ void dns_zone_add(const char *name, uint32_t ip);
 
 /* DNS cache */
 void dns_cache_add(const char *name, uint32_t ip, int ttl_sec);
+int  dns_cache_add_secure(const char *name, uint32_t ip, int ttl_sec);
 void dns_cache_flush(void);
 void dns_cache_dump(void);
 

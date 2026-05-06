@@ -119,6 +119,7 @@ Available defenses:
 - `conn-timeout` — Close idle ESTABLISHED connections after N seconds (slowloris defense)
 - `frag-strict` — Reject overlapping and tiny IP fragments
 - `mitm-detect` — Alert on ARP MAC flapping (possible MITM indicator)
+- `dns-validate` — Validate DNS cache entries against authoritative zone table
 
 ### Enable debug logging
 

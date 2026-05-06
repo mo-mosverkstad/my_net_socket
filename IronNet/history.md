@@ -3874,3 +3874,67 @@ After Phase 17b:
 - **18 unit tests + 11 module tests = 29 tests, all passing**
 - DNS cache with TTL expiry working
 - Cache poisoning demonstrated via CLI
+
+---
+
+## Phase 17c: DNS Security (dns-validate defense)
+
+### What was done
+
+1. **`defense dns-validate enable`** — validates DNS cache entries against the zone table before accepting
+2. **`dns_cache_add_secure()`** — checks if the IP matches the authoritative zone; blocks if mismatch
+3. **Audit logging** — blocked poisoning attempts logged as AUDIT_ACL_DENY events
+
+### How it works
+
+When `dns-validate` is enabled:
+1. `dns cache-poison ironnet.local 10.0.99.1 60` is attempted
+2. `dns_cache_add_secure()` checks: does `ironnet.local` exist in the zone table?
+3. Zone table says `ironnet.local = 10.0.1.1`
+4. Attempted IP `10.0.99.1` ≠ real IP `10.0.1.1` → **BLOCKED**
+5. Cache is NOT poisoned, real answer continues to be served
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironapps/dns_server.c` | Added `dns_cache_add_secure()` with zone validation |
+| `ironapps/dns_server.h` | Added `dns_cache_add_secure()` declaration |
+| `ironstack/security/defense.c` | Registered `dns-validate` defense |
+| `ironctl/cli.c` | Updated `dns cache-poison` to use secure add |
+| `tests/CMakeLists.txt` | Added defense_stub/audit_stub to test_dns |
+
+### Verified results
+
+```
+# Without defense: poisoning succeeds
+ironctl> dns cache-poison ironnet.local 10.0.99.1 60
+DNS CACHE POISONED: ironnet.local -> 10.0.99.1 (TTL=60s)
+ironctl> dns lookup ironnet.local
+ironnet.local -> 10.0.99.1              ← poisoned!
+
+# With defense: poisoning blocked
+ironctl> defense dns-validate enable
+ironctl> dns cache-flush
+ironctl> dns cache-poison ironnet.local 10.0.99.1 60
+[DNS SECURITY] Cache poison BLOCKED: ironnet.local -> 10.0.99.1 (real: 10.0.1.1)
+ironctl> dns lookup ironnet.local
+ironnet.local -> 10.0.1.1              ← real IP preserved!
+```
+
+### Phase 17 complete
+
+All 3 sub-phases of Phase 17 are now done:
+
+| Sub-phase | Component | Status |
+|-----------|-----------|--------|
+| 17a | DNS response spoofing (zone poisoning) | ✅ |
+| 17b | DNS cache poisoning (TTL-based) | ✅ |
+| 17c | DNS security (dns-validate defense) | ✅ |
+
+### Current test summary
+
+After Phase 17c:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- 11 defenses registered (added dns-validate)
+- DNS poisoning attack and defense both demonstrated

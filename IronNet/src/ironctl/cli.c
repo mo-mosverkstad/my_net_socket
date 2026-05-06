@@ -411,10 +411,12 @@ int cli_execute(const char *line) {
             } else {
                 uint32_t ip = iron_str_to_ip(argv[3]);
                 int ttl = atoi(argv[4]);
-                dns_cache_add(argv[2], ip, ttl);
-                char ip_buf[16];
-                printf("DNS CACHE POISONED: %s -> %s (TTL=%ds)\n", argv[2],
-                       iron_ip_to_str(ip, ip_buf, sizeof(ip_buf)), ttl);
+                int rc = dns_cache_add_secure(argv[2], ip, ttl);
+                if (rc == 0) {
+                    char ip_buf[16];
+                    printf("DNS CACHE POISONED: %s -> %s (TTL=%ds)\n", argv[2],
+                           iron_ip_to_str(ip, ip_buf, sizeof(ip_buf)), ttl);
+                }
             }
         } else if (strcmp(argv[1], "cache") == 0) {
             dns_cache_dump();

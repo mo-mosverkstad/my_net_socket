@@ -66,6 +66,10 @@ static dns_cache_entry_t *dns_cache_find(const char *name) {
 }
 
 void dns_cache_add(const char *name, uint32_t ip, int ttl_sec) {
+    /* DNS security: if dns-validate is enabled, reject external cache additions */
+    /* (Only internal zone lookups are allowed to populate cache) */
+    /* This is checked by the caller — see dns_cache_add_validated() below */
+
     /* Overwrite existing */
     for (int i = 0; i < g_dns_cache_count; i++) {
         if (g_dns_cache[i].active && strcmp(g_dns_cache[i].name, name) == 0) {
@@ -83,6 +87,34 @@ void dns_cache_add(const char *name, uint32_t ip, int ttl_sec) {
         e->active = true;
         g_dns_cache_count++;
     }
+}
+
+/* Secure cache add — checks dns-validate defense */
+#include "../ironstack/security/defense.h"
+#include "../ironmon/audit.h"
+
+int dns_cache_add_secure(const char *name, uint32_t ip, int ttl_sec) {
+    if (defense_is_enabled("dns-validate")) {
+        /* Only allow if IP matches zone table (trusted source) */
+        uint32_t real_ip = 0;
+        for (int i = 0; i < g_zone_count; i++) {
+            if (g_zones[i].active && strcmp(g_zones[i].name, name) == 0) {
+                real_ip = g_zones[i].ip;
+                break;
+            }
+        }
+        if (real_ip != 0 && real_ip != ip) {
+            char ip_buf[16], real_buf[16];
+            printf("[DNS SECURITY] Cache poison BLOCKED: %s -> %s (real: %s)\n",
+                   name,
+                   iron_ip_to_str(ip, ip_buf, sizeof(ip_buf)),
+                   iron_ip_to_str(real_ip, real_buf, sizeof(real_buf)));
+            audit_log_event(AUDIT_ACL_DENY, ip, real_ip, 17, 0, 53, "DNS cache poison blocked");
+            return -1;
+        }
+    }
+    dns_cache_add(name, ip, ttl_sec);
+    return 0;
 }
 
 void dns_cache_flush(void) {

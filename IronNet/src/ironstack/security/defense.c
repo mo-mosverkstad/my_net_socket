@@ -45,6 +45,7 @@ int defense_init(void) {
     defense_find_or_create("frag-strict");
     defense_find_or_create("icmp-redirect-disable");
     defense_find_or_create("mitm-detect");
+    defense_find_or_create("dns-validate");
     LOG_INF(MODULE, "Defense module initialized (%d defenses registered)", g_defense_count);
     return 0;
 }

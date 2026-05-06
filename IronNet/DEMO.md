@@ -29,9 +29,12 @@ All demos are in the `demos/` folder. Each file is fully self-contained — it i
 | [demo.21.irontrace-capture.md](demos/demo.21.irontrace-capture.md) | Phase 15a | Packet capture to pcap file + tcpdump/Wireshark viewing |
 | [demo.22.irontrace-replay.md](demos/demo.22.irontrace-replay.md) | Phase 15b | Replay pcap captures for regression testing |
 | [demo.23.regression-workflow.md](demos/demo.23.regression-workflow.md) | Phase 15c | Full regression workflow: capture → fix → replay → verify |
-| [demo.24.mitm-relay.md](demos/demo.24.mitm-relay.md) | Phase 16a/16b/16c | MITM relay + traffic modification + detection |
-| [demo.25.dns-spoof.md](demos/demo.25.dns-spoof.md) | Phase 17a | DNS response spoofing — zone poisoning |
-| [demo.26.dns-cache-poison.md](demos/demo.26.dns-cache-poison.md) | Phase 17b | DNS cache poisoning with TTL expiry |
+| [demo.24.mitm-relay.md](demos/demo.24.mitm-relay.md) | Phase 16a | MITM relay engine: ARP poison + sniff + forward |
+| [demo.25.mitm-modify.md](demos/demo.25.mitm-modify.md) | Phase 16b | MITM traffic modification: in-transit data alteration |
+| [demo.26.mitm-detect.md](demos/demo.26.mitm-detect.md) | Phase 16c | MITM detection: MAC flap monitoring |
+| [demo.27.dns-spoof.md](demos/demo.27.dns-spoof.md) | Phase 17a | DNS response spoofing — zone poisoning |
+| [demo.28.dns-cache-poison.md](demos/demo.28.dns-cache-poison.md) | Phase 17b | DNS cache poisoning with TTL expiry |
+| [demo.29.dns-security.md](demos/demo.29.dns-security.md) | Phase 17c | DNS security — blocking cache poisoning |
 
 ## Quick Build Reference
 
