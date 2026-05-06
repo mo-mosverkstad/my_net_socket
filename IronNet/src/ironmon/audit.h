@@ -17,7 +17,8 @@ typedef enum {
     AUDIT_CONNTRACK_INVALID,
     AUDIT_FRAGMENT_DROP,
     AUDIT_VLAN_MISMATCH,
-    AUDIT_TTL_EXPIRED
+    AUDIT_TTL_EXPIRED,
+    AUDIT_COVERT_CHANNEL
 } audit_event_type_t;
 
 typedef struct {

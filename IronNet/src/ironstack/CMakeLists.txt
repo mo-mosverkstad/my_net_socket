@@ -22,6 +22,7 @@ add_executable(ironstack
     l4/tcp.c
     security/ipsec.c
     security/defense.c
+    security/covert_detect.c
 )
 
 target_include_directories(ironstack PRIVATE
@@ -29,4 +30,4 @@ target_include_directories(ironstack PRIVATE
     ${CMAKE_SOURCE_DIR}/common
 )
 
-target_link_libraries(ironstack iron_common iron_cli iron_mon iron_apps iron_probe iron_fuzz iron_load iron_trace pthread)
+target_link_libraries(ironstack iron_common iron_cli iron_mon iron_apps iron_probe iron_fuzz iron_load iron_trace pthread m)

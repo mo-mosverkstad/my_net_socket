@@ -1,7 +1,7 @@
 add_executable(ironprobe-ext main.c)
 target_include_directories(ironprobe-ext PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(ironreport report.c)
+add_executable(ironreport report.c ../tests/stubs/covert_stub.c)
 target_include_directories(ironreport PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/common

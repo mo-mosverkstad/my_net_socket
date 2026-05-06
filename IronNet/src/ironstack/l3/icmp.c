@@ -5,6 +5,7 @@
 #include "stats.h"
 #include "utils.h"
 #include "../security/defense.h"
+#include "../security/covert_detect.h"
 #include "../ironmon/audit.h"
 
 #include <string.h>
@@ -31,6 +32,12 @@ int icmp_input(uint32_t src_ip, uint32_t dst_ip,
     case ICMP_TYPE_ECHO_REQUEST:
         LOG_DBG(MODULE, "Echo request from %08X, id=%u seq=%u",
                 src_ip, iron_ntohs(hdr->id), iron_ntohs(hdr->seq));
+
+        /* Covert channel detection: check ICMP payload entropy + timing */
+        if (defense_is_enabled("covert-detect")) {
+            covert_detect_icmp(data, len, src_ip, dst_ip);
+            covert_detect_timing(src_ip, dst_ip);
+        }
 
         /* Build echo reply: swap src/dst, change type to reply, recompute checksum */
         hdr->type = ICMP_TYPE_ECHO_REPLY;

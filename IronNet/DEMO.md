@@ -41,6 +41,7 @@ All demos are in the `demos/` folder. Each file is fully self-contained — it i
 | [demo.33.exploit-mitigations.md](demos/demo.33.exploit-mitigations.md) | Phase 18c | Exploit mitigations (stack canary, bounds checking, ASLR) |
 | [demo.34.covert-channels.md](demos/demo.34.covert-channels.md) | Phase 19a | Covert channels (ICMP payload, TCP ISN, DNS subdomain) |
 | [demo.35.timing-channels.md](demos/demo.35.timing-channels.md) | Phase 19b | Timing-based covert channels (delay, counting, IP ID) |
+| [demo.36.covert-detect.md](demos/demo.36.covert-detect.md) | Phase 19c | Covert channel detection (entropy, timing, ISN, DNS analysis) |
 
 ## Quick Build Reference
 

@@ -126,6 +126,7 @@ Available defenses:
 - `icmp-redirect-disable` — Ignore incoming ICMP redirect messages
 - `mitm-detect` — Alert on ARP MAC flapping (possible MITM indicator)
 - `dns-validate` — Validate DNS cache entries against authoritative zone table
+- `covert-detect` — Detect covert channels via entropy, timing, ISN, and DNS analysis
 
 ### Enable debug logging
 

@@ -91,6 +91,7 @@ void dns_cache_add(const char *name, uint32_t ip, int ttl_sec) {
 
 /* Secure cache add — checks dns-validate defense */
 #include "../ironstack/security/defense.h"
+#include "../ironstack/security/covert_detect.h"
 #include "../ironmon/audit.h"
 
 int dns_cache_add_secure(const char *name, uint32_t ip, int ttl_sec) {
@@ -369,6 +370,11 @@ static void dns_on_query(int sock_id, uint32_t src_ip, uint16_t src_port,
     char qname[DNS_MAX_NAME];
     int pos = dns_parse_name(data, 12, data_len, qname, sizeof(qname));
     if (pos < 0) return;
+
+    /* Covert channel detection: check DNS label entropy */
+    if (defense_is_enabled("covert-detect")) {
+        covert_detect_dns(qname, src_ip, iface_get(0) ? iface_get(0)->ip : 0);
+    }
 
     LOG_INF(MODULE, "Query: %s from port %u", qname, src_port);
 

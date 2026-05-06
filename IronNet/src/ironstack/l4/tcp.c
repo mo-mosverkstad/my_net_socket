@@ -5,6 +5,7 @@
 #include "../ironapps/app_socket.h"
 #include "../l3/ip.h"
 #include "../security/defense.h"
+#include "../security/covert_detect.h"
 #include "../irontrace/trace.h"
 
 #include <string.h>
@@ -188,6 +189,10 @@ int tcp_input(uint32_t src_ip, uint32_t dst_ip,
 
     /* New connection: SYN without existing state */
     if ((flags & TCP_FLAG_SYN) && !(flags & TCP_FLAG_ACK) && !conn) {
+        /* Covert channel detection: analyze ISN for encoded data */
+        if (defense_is_enabled("covert-detect")) {
+            covert_detect_isn(seq, src_ip, dst_ip);
+        }
         /* Rate limiting defense */
         if (defense_is_enabled("rate-limit")) {
             if (!rate_limit_check(src_ip)) {
