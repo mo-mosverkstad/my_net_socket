@@ -4382,3 +4382,52 @@ After Phase 19c:
 - 12 defenses registered (added covert-detect)
 - 4 anomaly detectors integrated into pipeline
 - All 19 phases of the IronNet project are now complete
+
+---
+
+## Test Coverage Improvement
+
+### What was done
+
+Added 3 new unit tests to cover previously untested modules:
+
+1. **test_covert_detect** (7 assertions) — covert channel detection functions
+2. **test_apps** (11 assertions) — KV, HTTP, and RPC server command parsing
+3. **test_router_conf** (5 assertions) — config file parsing (interfaces, routes, ACLs)
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `tests/unit/test_covert_detect.c` | ICMP entropy, ISN ASCII ratio, DNS label entropy |
+| `tests/unit/test_apps.c` | KV SET/GET/DEL, HTTP GET/404/400, RPC PING/ECHO/bad magic/too short |
+| `tests/unit/test_router_conf.c` | Config load, interface parsed, routes parsed, ACL parsed, missing file |
+
+### Test details
+
+**test_covert_detect:**
+- `test_icmp_low_entropy_no_alert` — normal ping pattern (0x10-0x37) → no alert
+- `test_icmp_high_ascii_alert` — ASCII text in payload → alert (>70% printable)
+- `test_isn_random_no_alert` — random ISNs (0xDEADBEEF etc.) → no alert
+- `test_isn_ascii_alert` — ASCII ISNs ("HELL", "O WO"...) → alert
+- `test_dns_normal_no_alert` — "ironnet.local" → no alert
+- `test_dns_base64_alert` — base64 subdomain → alert (high entropy)
+- `test_dns_short_label_no_alert` — "www" → no alert (too short to analyze)
+
+**test_apps:**
+- KV: SET+GET, GET nonexistent (nil), DEL, unknown command
+- HTTP: GET / (200), GET /nonexistent (404), POST (400 bad method)
+- RPC: PING→PONG, ECHO→ECHO_REPLY, bad magic→ERROR, too short→ERROR
+
+**test_router_conf:**
+- Load config file with interface/route/ACL lines
+- Verify interface parsed (name, IP, prefix)
+- Verify routes parsed (connected + default via)
+- Verify ACL parsed (permit port 80, deny port 22)
+- Missing file returns 0 (graceful)
+
+### Current test summary
+
+After test coverage improvement:
+- **21 unit tests + 11 module tests = 32 tests, all passing**
+- Coverage gaps filled: covert detection, app servers, config parser

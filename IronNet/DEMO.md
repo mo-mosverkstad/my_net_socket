@@ -57,7 +57,7 @@ make
 ```bash
 cd IronNet/build
 ctest --output-on-failure
-# Expected: 29 tests (18 unit + 11 module), all passing
+# Expected: 32 tests (21 unit + 11 module), all passing
 ```
 
 ## ironattack Subcommands

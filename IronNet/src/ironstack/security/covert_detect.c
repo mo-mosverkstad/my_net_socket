@@ -36,7 +36,7 @@ static double calc_entropy(const uint8_t *data, int len) {
 }
 
 /* --- ICMP payload analysis --- */
-#define ICMP_ENTROPY_THRESHOLD 5.5 /* Normal ping ~5.3 (timestamp+pattern); base64/binary > 5.5 */
+#define ICMP_ENTROPY_THRESHOLD 5.7 /* Normal ping ~5.6 (timestamp+pattern); base64/binary > 5.7 */
 #define ICMP_ASCII_THRESHOLD 0.7  /* Normal ping payload is mostly non-printable; text > 70% printable */
 
 int covert_detect_icmp(const uint8_t *payload, int payload_len,

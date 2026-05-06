@@ -130,6 +130,30 @@ target_include_directories(test_dns PRIVATE
 )
 target_link_libraries(test_dns iron_common)
 
+add_executable(test_covert_detect unit/test_covert_detect.c)
+target_include_directories(test_covert_detect PRIVATE
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+    ${CMAKE_SOURCE_DIR}
+)
+target_link_libraries(test_covert_detect iron_common m)
+
+add_executable(test_apps unit/test_apps.c)
+target_include_directories(test_apps PRIVATE
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+    ${CMAKE_SOURCE_DIR}
+)
+target_link_libraries(test_apps iron_common)
+
+add_executable(test_router_conf unit/test_router_conf.c)
+target_include_directories(test_router_conf PRIVATE
+    ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/ironstack
+    ${CMAKE_SOURCE_DIR}
+)
+target_link_libraries(test_router_conf iron_common)
+
 # Module tests
 add_executable(test_l2_module module/test_l2_module.c stubs/defense_stub.c stubs/audit_stub.c stubs/trace_stub.c)
 target_include_directories(test_l2_module PRIVATE
@@ -245,6 +269,9 @@ add_test(NAME test_defense COMMAND test_defense)
 add_test(NAME test_audit COMMAND test_audit)
 add_test(NAME test_app_socket COMMAND test_app_socket)
 add_test(NAME test_dns COMMAND test_dns)
+add_test(NAME test_covert_detect COMMAND test_covert_detect)
+add_test(NAME test_apps COMMAND test_apps)
+add_test(NAME test_router_conf COMMAND test_router_conf)
 
 # Module tests
 add_test(NAME module_l2 COMMAND test_l2_module)
