@@ -24,7 +24,7 @@ static void usage(void) {
     fprintf(stderr, "  dns-spoof  --domain <name> --fake-ip <ip> --target <ip> [--count <n>] [--iface <name>]\n");
     fprintf(stderr, "  dns-spoof-ext --domain <name> --fake-ip <ip> --target <ip> [--count <n>] [--iface <name>]\n");
     fprintf(stderr, "  exploit  --target <ip> [--mode crash|pattern|payload|fmtstr] [--size <n>]\n");
-    fprintf(stderr, "  covert   --target <ip> --mode icmp|isn|dns --message <text> [--iface <name>]\n");
+    fprintf(stderr, "  covert   --target <ip> --mode icmp|isn|dns|timing|counting|ipid --message <text> [--iface <name>]\n");
     fprintf(stderr, "\nAll commands require sudo (raw socket access).\n");
 }
 

@@ -4275,3 +4275,48 @@ After Phase 19a:
 - **18 unit tests + 11 module tests = 29 tests, all passing**
 - ironattack has 12 subcommands (added covert)
 - Three covert channel implementations demonstrated
+
+---
+
+## Phase 19b: Timing-Based Covert Channels
+
+### What was done
+
+Added three timing/steganographic covert channels to the existing `ironattack covert` tool:
+
+1. **Timing channel** (`--mode timing`) — encodes bits as inter-packet delays (100ms=1, 10ms=0). ~18 bps bandwidth.
+2. **Packet counting channel** (`--mode counting`) — encodes bits as burst size per 200ms window (2 pkts=0, 7 pkts=1). ~5 bps bandwidth.
+3. **IP ID channel** (`--mode ipid`) — encodes 2 bytes per packet in the IP Identification field. High bandwidth.
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironattack/covert.c` | Added `covert_timing()`, `covert_counting()`, `covert_ipid()` + updated dispatch/help |
+| `ironattack/main.c` | Updated covert help text with new modes |
+| `DEMO.md` | Added demo.35 entry |
+| `test.md` | Updated demo count |
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `demos/demo.35.timing-channels.md` | Self-contained demo |
+
+### How each channel works
+
+**Timing:** Sends ICMP pings with variable delays. Receiver measures inter-packet gaps: >50ms = bit 1, <50ms = bit 0. No payload modification — completely invisible to content inspection.
+
+**Counting:** Sends bursts of pings per time window. Receiver counts packets per 200ms window: <=4 = bit 0, >=5 = bit 1. Even harder to detect than timing (looks like variable-rate traffic).
+
+**IP ID:** Encodes 2 bytes in the 16-bit IP Identification field of each packet. IP ID is normally sequential/random and ignored by most systems. High bandwidth but detectable via statistical analysis.
+
+### Key difference from Phase 19a
+
+Phase 19a channels hide data **in packet content** (payload, fields). Phase 19b channels hide data **in packet behavior** (timing, count, metadata). Timing channels are invisible to payload inspection — you must analyze traffic patterns to detect them.
+
+### Current test summary
+
+After Phase 19b:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- Covert tool has 6 modes: icmp, isn, dns (19a) + timing, counting, ipid (19b)
