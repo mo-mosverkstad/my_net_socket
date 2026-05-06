@@ -118,6 +118,7 @@ Available defenses:
 - `urpf` — Validate source IP reachable via ingress interface (strict mode: no route = drop)
 - `conn-timeout` — Close idle ESTABLISHED connections after N seconds (slowloris defense)
 - `frag-strict` — Reject overlapping and tiny IP fragments
+- `mitm-detect` — Alert on ARP MAC flapping (possible MITM indicator)
 
 ### Enable debug logging
 

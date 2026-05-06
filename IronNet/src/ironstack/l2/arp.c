@@ -57,6 +57,19 @@ void arp_add_entry(uint32_t ip, const uint8_t *mac) {
     /* Update existing entry */
     for (int i = 0; i < g_arp_count; i++) {
         if (g_arp_table[i].valid && g_arp_table[i].ip == ip) {
+            /* MITM detection: MAC changed for same IP */
+            if (defense_is_enabled("mitm-detect") &&
+                memcmp(g_arp_table[i].mac, mac, 6) != 0) {
+                char ip_buf[16];
+                LOG_WRN(MODULE, "MITM DETECT: MAC flap for %s "
+                        "(%02X:%02X:%02X:%02X:%02X:%02X -> %02X:%02X:%02X:%02X:%02X:%02X)",
+                        iron_ip_to_str(ip, ip_buf, sizeof(ip_buf)),
+                        g_arp_table[i].mac[0], g_arp_table[i].mac[1],
+                        g_arp_table[i].mac[2], g_arp_table[i].mac[3],
+                        g_arp_table[i].mac[4], g_arp_table[i].mac[5],
+                        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                audit_log_event(AUDIT_ARP_ANOMALY, ip, 0, 0, 0, 0, "MAC flap - possible MITM");
+            }
             memcpy(g_arp_table[i].mac, mac, 6);
             g_arp_table[i].timestamp = arp_now();
             return;

@@ -248,6 +248,15 @@ static void cmd_arp_cli(int argc, char **argv) {
         printf("ARP entry added.\n");
     } else if (strcmp(argv[1], "show") == 0) {
         arp_dump();
+    } else if (strcmp(argv[1], "spoof-test") == 0) {
+        if (argc < 3) {
+            printf("Usage: arp spoof-test <ip>\n");
+        } else {
+            uint32_t ip = iron_str_to_ip(argv[2]);
+            uint8_t fake_mac[6] = {0x02, 0xDE, 0xAD, 0xBE, 0xEF, 0x99};
+            printf("Simulating ARP spoof for %s (fake MAC 02:DE:AD:BE:EF:99)\n", argv[2]);
+            arp_add_entry(ip, fake_mac);
+        }
     } else {
         printf("Unknown: arp %s\n", argv[1]);
     }

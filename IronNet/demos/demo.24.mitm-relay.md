@@ -289,3 +289,84 @@ Node A (iron-a0) ←→ Attacker (iron-b0, iron-b1) ←→ Node C (iron-c0)
 ```
 
 This is how real MITM attacks work — the attacker is a separate host on the network path.
+
+---
+
+## MITM Detection Demo (Phase 16c)
+
+The router can detect MITM attacks by monitoring ARP table changes. When a MAC address for an existing IP changes rapidly ("MAC flapping"), it indicates ARP poisoning.
+
+### Terminal 1: Start router with detection enabled
+
+```bash
+cd IronNet/build
+sudo ./ironstack/ironstack -d ../src/configs/router.conf
+```
+
+```
+ironctl> defense mitm-detect enable
+[INFO ] [DEFENSE] Defense 'mitm-detect' ENABLED
+```
+
+### Terminal 1: Simulate ARP spoofing (triggers detection)
+
+First create a legitimate ARP entry, then simulate an attacker changing it:
+
+```
+ironctl> arp add 10.0.1.2 02:00:00:00:00:AA
+ARP entry added.
+
+ironctl> arp spoof-test 10.0.1.2
+Simulating ARP spoof for 10.0.1.2 (fake MAC 02:DE:AD:BE:EF:99)
+[WARN ] [ARP] MITM DETECT: MAC flap for 10.0.1.2 (02:00:00:00:00:AA -> 02:DE:AD:BE:EF:99)
+```
+
+The detection fires immediately — the MAC for 10.0.1.2 changed from the legitimate `02:00:00:00:00:AA` to the attacker's `02:DE:AD:BE:EF:99`.
+
+### Terminal 1: Verify audit log
+
+```
+ironctl> show audit-log
+  [XXXX] ARP_ANOMALY   10.0.1.2:0 -> 0.0.0.0:0 proto=0 MAC flap - possible MITM
+```
+
+### How detection works
+
+1. `defense mitm-detect enable` activates MAC flap monitoring
+2. When `arp_add_entry()` is called with a **different MAC** for an existing IP:
+   - Logs: `[WARN] MITM DETECT: MAC flap for <ip> (old_mac -> new_mac)`
+   - Audit event: `AUDIT_ARP_ANOMALY` with "MAC flap - possible MITM"
+3. In a real network, this triggers when an attacker sends ARP replies claiming a victim's IP is at the attacker's MAC
+
+### Note on external testing
+
+The `arp spoof-test` CLI command simulates what happens when an attacker's ARP reply reaches the router. On a single-TAP setup, external `ironattack arp-spoof` packets cannot reach ironstack as valid ARP frames (architectural limitation — ARP is not IP and can't be sent via raw IP socket). In the ironsim multi-node topology, real ARP flows between nodes and detection works with actual attack traffic.
+
+### External ARP spoof attempt (for reference)
+
+You can also try the external attack tool. On a single-TAP setup, the ARP frames don't reach ironstack (no warning fires), but this demonstrates the attack command:
+
+**Terminal 2:**
+```bash
+sudo ip addr add 10.0.1.2/24 dev iron0
+sudo ip link set iron0 up
+ping -c 1 10.0.1.1
+```
+
+**Terminal 3:**
+```bash
+cd IronNet/build
+sudo ./ironattack/ironattack arp-spoof --target 10.0.1.1 --impersonate 10.0.1.2 --count 3
+```
+
+Expected output:
+```
+=== ARP Spoof Attack ===
+  Target:      10.0.1.1
+  Impersonate: 10.0.1.2
+  Count:       3
+
+  Sent: 3 ARP replies
+```
+
+**Terminal 1:** No warning appears — this is the known limitation. The ARP frames are sent via raw IP socket which cannot deliver non-IP (ethertype 0x0806) frames to the TAP device. In a real multi-host network or ironsim topology, these ARP replies would reach the router and trigger the MITM detection alert.

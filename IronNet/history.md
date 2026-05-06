@@ -3718,3 +3718,56 @@ After Phase 16b:
 - **18 unit tests + 11 module tests = 29 tests, all passing**
 - ironmitm supports --modify with multiple rules
 - Modification logic verified via --help and code review
+
+---
+
+## Phase 16c: MITM Detection
+
+### What was done
+
+Added MITM detection to ironstack via MAC flap monitoring:
+1. **MAC flap detection** — when an existing ARP entry's MAC changes, alert if `mitm-detect` defense is enabled
+2. **Audit logging** — AUDIT_ARP_ANOMALY event with "MAC flap - possible MITM" detail
+3. **`defense mitm-detect enable`** CLI command
+
+### How it works
+
+When a MITM attacker sends ARP replies claiming a victim's IP is at the attacker's MAC, the ARP table entry for that IP changes. With `mitm-detect` enabled, this MAC change triggers:
+- `[WARN] MITM DETECT: MAC flap for 10.0.1.254 (02:00:00:00:00:01 -> 02:DE:AD:BE:EF:01)`
+- Audit event logged for forensic analysis
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironstack/l2/arp.c` | Added MAC flap detection in `arp_add_entry()` when mitm-detect enabled |
+| `ironstack/security/defense.c` | Registered `mitm-detect` defense |
+
+### Usage
+
+```
+ironctl> defense mitm-detect enable
+[INFO ] [DEFENSE] Defense 'mitm-detect' ENABLED
+
+# When ARP spoofing occurs:
+[WARN ] [ARP] MITM DETECT: MAC flap for 10.0.1.254 (02:00:00:00:00:01 -> 02:DE:AD:BE:EF:01)
+
+ironctl> show audit-log
+# Shows AUDIT_ARP_ANOMALY events with "MAC flap - possible MITM"
+```
+
+### Phase 16 complete
+
+All 3 sub-phases of Phase 16 are now done:
+
+| Sub-phase | Component | Status |
+|-----------|-----------|--------|
+| 16a | MITM relay engine (ironmitm) | ✅ |
+| 16b | Traffic modification (--modify) | ✅ |
+| 16c | MITM detection (MAC flap alerts) | ✅ |
+
+### Current test summary
+
+After Phase 16c:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- 10 defenses registered (syn-cookies, rate-limit, arp-inspection, vlan-strict, rst-validation, urpf, conn-timeout, frag-strict, icmp-redirect-disable, mitm-detect)
