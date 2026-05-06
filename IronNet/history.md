@@ -3771,3 +3771,55 @@ All 3 sub-phases of Phase 16 are now done:
 After Phase 16c:
 - **18 unit tests + 11 module tests = 29 tests, all passing**
 - 10 defenses registered (syn-cookies, rate-limit, arp-inspection, vlan-strict, rst-validation, urpf, conn-timeout, frag-strict, icmp-redirect-disable, mitm-detect)
+
+---
+
+## Phase 17a: DNS Response Spoofing
+
+### What was done
+
+1. **`ironattack dns-spoof`** — external attack tool that sends forged DNS responses via raw IP socket
+2. **`dns spoof-test` CLI command** — directly poisons the DNS zone table (simulates successful DNS spoofing)
+3. **`dns lookup` CLI command** — query the DNS zone table to verify poisoning
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironattack/main.c` | Added `dns-spoof` subcommand (crafts forged DNS UDP responses) |
+| `ironapps/dns_server.h` | Added `dns_zone_add()` declaration |
+| `ironapps/dns_server.c` | Added `dns_zone_add()` implementation (overwrite/add zone entry) |
+| `ironctl/cli.c` | Added `dns spoof-test` and `dns lookup` CLI commands |
+
+### Usage
+
+**External attack (sends forged DNS responses via raw socket):**
+```bash
+sudo ./ironattack/ironattack dns-spoof --domain ironnet.local --fake-ip 10.0.99.1 --target 10.0.1.1 --count 10
+```
+
+**Internal simulation (directly poisons zone table):**
+```
+ironctl> dns lookup ironnet.local
+ironnet.local -> 10.0.1.1
+
+ironctl> dns spoof-test ironnet.local 10.0.99.1
+DNS POISONED: ironnet.local -> 10.0.99.1
+
+ironctl> dns lookup ironnet.local
+ironnet.local -> 10.0.99.1
+```
+
+### Verified results
+
+- `dns lookup` shows real IP before poisoning ✅
+- `dns spoof-test` overwrites zone entry ✅
+- `dns lookup` shows attacker's IP after poisoning ✅
+- Subsequent DNS queries from clients receive the poisoned IP ✅
+
+### Current test summary
+
+After Phase 17a:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- ironattack has 9 subcommands (added dns-spoof)
+- DNS poisoning demonstrated via CLI

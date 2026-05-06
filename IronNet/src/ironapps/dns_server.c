@@ -77,6 +77,25 @@ uint32_t dns_zone_lookup(const char *name) {
     return z ? z->ip : 0;
 }
 
+/* Public add/overwrite for testing (DNS poisoning simulation) */
+void dns_zone_add(const char *name, uint32_t ip) {
+    /* Check if exists — overwrite */
+    for (int i = 0; i < g_zone_count; i++) {
+        if (g_zones[i].active && strcmp(g_zones[i].name, name) == 0) {
+            g_zones[i].ip = ip;
+            return;
+        }
+    }
+    /* Add new */
+    if (g_zone_count < DNS_MAX_ZONES) {
+        dns_zone_entry_t *z = &g_zones[g_zone_count];
+        strncpy(z->name, name, sizeof(z->name) - 1);
+        z->ip = ip;
+        z->active = true;
+        g_zone_count++;
+    }
+}
+
 /* Build DNS response */
 static int dns_build_response(const uint8_t *query, int query_len,
                               uint32_t answer_ip, uint8_t *resp, int resp_max) {

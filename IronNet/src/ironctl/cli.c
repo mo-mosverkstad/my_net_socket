@@ -21,6 +21,7 @@
 #include "../ironstack/security/defense.h"
 #include "../irontrace/trace.h"
 #include "../ironstack/io/vnic.h"
+#include "../ironapps/dns_server.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -390,6 +391,33 @@ int cli_execute(const char *line) {
             audit_disable();
         } else {
             printf("Usage: audit <enable|disable>\n");
+        }
+    } else if (strcmp(argv[0], "dns") == 0) {
+        if (argc < 2) {
+            printf("Usage: dns <spoof-test|lookup> ...\n");
+        } else if (strcmp(argv[1], "spoof-test") == 0) {
+            if (argc < 4) {
+                printf("Usage: dns spoof-test <domain> <fake-ip>\n");
+            } else {
+                uint32_t ip = iron_str_to_ip(argv[3]);
+                dns_zone_add(argv[2], ip);
+                char ip_buf[16];
+                printf("DNS POISONED: %s -> %s\n", argv[2],
+                       iron_ip_to_str(ip, ip_buf, sizeof(ip_buf)));
+            }
+        } else if (strcmp(argv[1], "lookup") == 0) {
+            if (argc < 3) {
+                printf("Usage: dns lookup <domain>\n");
+            } else {
+                uint32_t ip = dns_zone_lookup(argv[2]);
+                char ip_buf[16];
+                if (ip)
+                    printf("%s -> %s\n", argv[2], iron_ip_to_str(ip, ip_buf, sizeof(ip_buf)));
+                else
+                    printf("%s -> NOT FOUND\n", argv[2]);
+            }
+        } else {
+            printf("Usage: dns <spoof-test|lookup> ...\n");
         }
     } else if (strcmp(argv[0], "trace") == 0) {
         if (argc < 2) {
