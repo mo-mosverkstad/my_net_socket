@@ -29,7 +29,7 @@ All demos are in the `demos/` folder. Each file is fully self-contained — it i
 | [demo.21.irontrace-capture.md](demos/demo.21.irontrace-capture.md) | Phase 15a | Packet capture to pcap file + tcpdump/Wireshark viewing |
 | [demo.22.irontrace-replay.md](demos/demo.22.irontrace-replay.md) | Phase 15b | Replay pcap captures for regression testing |
 | [demo.23.regression-workflow.md](demos/demo.23.regression-workflow.md) | Phase 15c | Full regression workflow: capture → fix → replay → verify |
-| [demo.24.mitm-relay.md](demos/demo.24.mitm-relay.md) | Phase 16a | Man-in-the-Middle relay: ARP poison + sniff + forward |
+| [demo.24.mitm-relay.md](demos/demo.24.mitm-relay.md) | Phase 16a/16b | Man-in-the-Middle relay: ARP poison + sniff + modify + forward |
 
 ## Quick Build Reference
 

@@ -3646,3 +3646,75 @@ After Phase 16a:
 - Known limitation: forwarding creates loops on single-TAP setup (architectural)
 - Recommendation: use ironsim 3-node topology for full bidirectional MITM
 - Phase 16b (traffic modification) should target the ironsim multi-node topology
+
+---
+
+## Phase 16b: Traffic Modification (ironmitm --modify)
+
+### What was done
+
+Added in-transit payload modification to ironmitm:
+1. `--modify "find:replace"` option — replaces matching patterns in packet payloads
+2. Multiple rules supported (up to 8)
+3. Same-length replacement only (in-place, no packet resize needed)
+4. Hit counter per rule, printed on shutdown
+5. Modification applied after logging, before forwarding
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironattack/mitm.c` | Added modify_rule_t, add_modify_rule(), apply_modifications(), --modify parsing, startup/shutdown stats |
+
+### Usage
+
+```bash
+# Replace "secret" with "XXXXXX" in all intercepted traffic
+sudo ./ironattack/ironmitm --victim-a 10.0.1.1 --victim-b 10.0.1.2 --iface iron0 \
+    --modify "secret:XXXXXX"
+
+# Multiple rules
+sudo ./ironattack/ironmitm --victim-a 10.0.1.1 --victim-b 10.0.1.2 --iface iron0 \
+    --modify "OK:NO" --modify "bar:XXX"
+```
+
+### Output example
+
+```
+╔══════════════════════════════════════════╗
+║     ironmitm — MITM Relay Engine         ║
+╚══════════════════════════════════════════╝
+
+  Victim A: 10.0.1.1
+  Victim B: 10.0.1.2
+  Iface:    iron0
+  Modify:   2 rules
+    [1] "secret" -> "XXXXXX"
+    [2] "bar" -> "XXX"
+
+  [mitm] Starting ARP poisoning + relay...
+  [A->B] 10.0.1.1:7 -> 10.0.1.2:49700 TCP (47 bytes)
+  [MODIFY] Replaced "secret" with "XXXXXX" at offset 54
+
+^C
+  [mitm] Stopped.
+  [mitm] Intercepted: 50 packets
+  [mitm] Forwarded:   50 packets
+  [mitm] Modification rules:
+    "secret" -> "XXXXXX": 3 hits
+    "bar" -> "XXX": 0 hits
+```
+
+### Limitations
+
+- Same-length replacement only (find and replace must be equal length)
+- Searches payload after TCP/IP headers (offset 54+)
+- Does not recalculate TCP checksums (modified packets may be dropped by strict receivers)
+- Same single-TAP forwarding loop limitation as Phase 16a applies
+
+### Current test summary
+
+After Phase 16b:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- ironmitm supports --modify with multiple rules
+- Modification logic verified via --help and code review

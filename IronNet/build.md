@@ -278,7 +278,7 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | libiron_fuzz.a | `build/ironfuzz/libiron_fuzz.a` | Library | Protocol fuzzer |
 | libiron_load.a | `build/ironload/libiron_load.a` | Library | Stress tester |
 | ironattack | `build/ironattack/ironattack` | Binary | External attack tool (syn-flood, arp-spoof, vlan-hop, rst-inject, ip-spoof, slowloris, frag-attack, icmp-redirect) |
-| ironmitm | `build/ironattack/ironmitm` | Binary | Man-in-the-Middle relay engine (ARP poison + sniff + log). Note: forwarding works in ironsim multi-node topology |
+| ironmitm | `build/ironattack/ironmitm` | Binary | MITM relay engine (ARP poison + sniff + log + modify). Full forwarding works in ironsim multi-node topology |
 | ironprobe-ext | `build/ironprobe_ext/ironprobe-ext` | Binary | External real SYN scanner via raw socket |
 | ironreport | `build/ironprobe_ext/ironreport` | Binary | Automated attack-defense report (5 test pairs) |
 | ironsim | `build/ironsim/ironsim` | Binary | Network emulator (multi-node topology with link impairments) |
