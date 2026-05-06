@@ -31,6 +31,7 @@ All demos are in the `demos/` folder. Each file is fully self-contained — it i
 | [demo.23.regression-workflow.md](demos/demo.23.regression-workflow.md) | Phase 15c | Full regression workflow: capture → fix → replay → verify |
 | [demo.24.mitm-relay.md](demos/demo.24.mitm-relay.md) | Phase 16a/16b/16c | MITM relay + traffic modification + detection |
 | [demo.25.dns-spoof.md](demos/demo.25.dns-spoof.md) | Phase 17a | DNS response spoofing — zone poisoning |
+| [demo.26.dns-cache-poison.md](demos/demo.26.dns-cache-poison.md) | Phase 17b | DNS cache poisoning with TTL expiry |
 
 ## Quick Build Reference
 

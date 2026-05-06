@@ -394,7 +394,7 @@ int cli_execute(const char *line) {
         }
     } else if (strcmp(argv[0], "dns") == 0) {
         if (argc < 2) {
-            printf("Usage: dns <spoof-test|lookup> ...\n");
+            printf("Usage: dns <spoof-test|lookup|cache-poison|cache|cache-flush> ...\n");
         } else if (strcmp(argv[1], "spoof-test") == 0) {
             if (argc < 4) {
                 printf("Usage: dns spoof-test <domain> <fake-ip>\n");
@@ -405,6 +405,22 @@ int cli_execute(const char *line) {
                 printf("DNS POISONED: %s -> %s\n", argv[2],
                        iron_ip_to_str(ip, ip_buf, sizeof(ip_buf)));
             }
+        } else if (strcmp(argv[1], "cache-poison") == 0) {
+            if (argc < 5) {
+                printf("Usage: dns cache-poison <domain> <fake-ip> <ttl-seconds>\n");
+            } else {
+                uint32_t ip = iron_str_to_ip(argv[3]);
+                int ttl = atoi(argv[4]);
+                dns_cache_add(argv[2], ip, ttl);
+                char ip_buf[16];
+                printf("DNS CACHE POISONED: %s -> %s (TTL=%ds)\n", argv[2],
+                       iron_ip_to_str(ip, ip_buf, sizeof(ip_buf)), ttl);
+            }
+        } else if (strcmp(argv[1], "cache") == 0) {
+            dns_cache_dump();
+        } else if (strcmp(argv[1], "cache-flush") == 0) {
+            dns_cache_flush();
+            printf("DNS cache flushed.\n");
         } else if (strcmp(argv[1], "lookup") == 0) {
             if (argc < 3) {
                 printf("Usage: dns lookup <domain>\n");
@@ -417,7 +433,7 @@ int cli_execute(const char *line) {
                     printf("%s -> NOT FOUND\n", argv[2]);
             }
         } else {
-            printf("Usage: dns <spoof-test|lookup> ...\n");
+            printf("Usage: dns <spoof-test|lookup|cache-poison|cache|cache-flush> ...\n");
         }
     } else if (strcmp(argv[0], "trace") == 0) {
         if (argc < 2) {

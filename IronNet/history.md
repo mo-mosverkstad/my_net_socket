@@ -3823,3 +3823,54 @@ After Phase 17a:
 - **18 unit tests + 11 module tests = 29 tests, all passing**
 - ironattack has 9 subcommands (added dns-spoof)
 - DNS poisoning demonstrated via CLI
+
+---
+
+## Phase 17b: DNS Cache Poisoning
+
+### What was done
+
+1. **DNS cache layer** — queries are cached with TTL; subsequent lookups served from cache
+2. **`dns cache-poison <domain> <ip> <ttl>`** CLI command — inject poisoned entry with custom TTL
+3. **`dns cache`** CLI command — show all cached entries with remaining TTL
+4. **`dns cache-flush`** CLI command — clear all cached entries
+5. **TTL expiry** — cached entries automatically expire; real answer returns after TTL
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironapps/dns_server.c` | Added DNS cache (32 entries), cache-first lookup, TTL expiry, dns_cache_add/flush/dump |
+| `ironapps/dns_server.h` | Added dns_cache_add, dns_cache_flush, dns_cache_dump declarations |
+| `ironctl/cli.c` | Added dns cache-poison, dns cache, dns cache-flush commands |
+
+### How DNS cache poisoning works
+
+1. Client queries `ironnet.local` → DNS server looks up zone → returns `10.0.1.1` → **caches result** (TTL=60s)
+2. Attacker poisons cache: `dns cache-poison ironnet.local 10.0.99.1 10`
+3. Next client query → served from **poisoned cache** → returns `10.0.99.1`
+4. After 10 seconds → cache entry expires → next query returns real `10.0.1.1` from zone table
+
+### Verified results
+
+```
+ironctl> dns lookup ironnet.local
+ironnet.local -> 10.0.1.1              ← real (cached with 60s TTL)
+
+ironctl> dns cache-poison ironnet.local 10.0.99.1 10
+DNS CACHE POISONED: ironnet.local -> 10.0.99.1 (TTL=10s)
+
+ironctl> dns lookup ironnet.local
+ironnet.local -> 10.0.99.1              ← poisoned!
+
+# After 10 seconds...
+ironctl> dns lookup ironnet.local
+ironnet.local -> 10.0.1.1              ← real answer returns (cache expired)
+```
+
+### Current test summary
+
+After Phase 17b:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- DNS cache with TTL expiry working
+- Cache poisoning demonstrated via CLI

@@ -32,6 +32,82 @@ typedef struct {
 static dns_zone_entry_t g_zones[DNS_MAX_ZONES];
 static int g_zone_count = 0;
 
+/* --- DNS Cache --- */
+#define DNS_CACHE_MAX 32
+
+typedef struct {
+    char name[DNS_MAX_NAME];
+    uint32_t ip;
+    uint64_t expire_time; /* monotonic seconds when entry expires */
+    bool active;
+} dns_cache_entry_t;
+
+static dns_cache_entry_t g_dns_cache[DNS_CACHE_MAX];
+static int g_dns_cache_count = 0;
+
+static uint64_t dns_now(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec;
+}
+
+static dns_cache_entry_t *dns_cache_find(const char *name) {
+    uint64_t now = dns_now();
+    for (int i = 0; i < g_dns_cache_count; i++) {
+        if (g_dns_cache[i].active && strcmp(g_dns_cache[i].name, name) == 0) {
+            if (now >= g_dns_cache[i].expire_time) {
+                g_dns_cache[i].active = false; /* expired */
+                return NULL;
+            }
+            return &g_dns_cache[i];
+        }
+    }
+    return NULL;
+}
+
+void dns_cache_add(const char *name, uint32_t ip, int ttl_sec) {
+    /* Overwrite existing */
+    for (int i = 0; i < g_dns_cache_count; i++) {
+        if (g_dns_cache[i].active && strcmp(g_dns_cache[i].name, name) == 0) {
+            g_dns_cache[i].ip = ip;
+            g_dns_cache[i].expire_time = dns_now() + ttl_sec;
+            return;
+        }
+    }
+    /* Add new */
+    if (g_dns_cache_count < DNS_CACHE_MAX) {
+        dns_cache_entry_t *e = &g_dns_cache[g_dns_cache_count];
+        strncpy(e->name, name, DNS_MAX_NAME - 1);
+        e->ip = ip;
+        e->expire_time = dns_now() + ttl_sec;
+        e->active = true;
+        g_dns_cache_count++;
+    }
+}
+
+void dns_cache_flush(void) {
+    memset(g_dns_cache, 0, sizeof(g_dns_cache));
+    g_dns_cache_count = 0;
+}
+
+void dns_cache_dump(void) {
+    uint64_t now = dns_now();
+    printf("=== DNS Cache ===\n");
+    int active = 0;
+    for (int i = 0; i < g_dns_cache_count; i++) {
+        dns_cache_entry_t *e = &g_dns_cache[i];
+        if (!e->active) continue;
+        if (now >= e->expire_time) { e->active = false; continue; }
+        char ip_buf[16];
+        printf("  %s -> %s (TTL: %lus)\n", e->name,
+               iron_ip_to_str(e->ip, ip_buf, sizeof(ip_buf)),
+               (unsigned long)(e->expire_time - now));
+        active++;
+    }
+    if (active == 0) printf("  (empty)\n");
+    printf("\n");
+}
+
 static void dns_add_zone(const char *name, const char *ip_str) {
     if (g_zone_count >= DNS_MAX_ZONES) return;
     dns_zone_entry_t *z = &g_zones[g_zone_count];
@@ -62,11 +138,26 @@ static int dns_parse_name(const uint8_t *data, int offset, int max_len, char *ou
     return pos;
 }
 
-/* Find zone entry by name */
+/* Find zone entry by name (checks cache first) */
 static dns_zone_entry_t *dns_lookup(const char *name) {
+    /* Check cache first */
+    dns_cache_entry_t *cached = dns_cache_find(name);
+    if (cached) {
+        /* Return from cache via a static zone entry (reuse pattern) */
+        static dns_zone_entry_t cache_result;
+        strncpy(cache_result.name, cached->name, DNS_MAX_NAME - 1);
+        cache_result.ip = cached->ip;
+        cache_result.active = true;
+        return &cache_result;
+    }
+
+    /* Fall through to zone table */
     for (int i = 0; i < g_zone_count; i++) {
-        if (g_zones[i].active && strcmp(g_zones[i].name, name) == 0)
+        if (g_zones[i].active && strcmp(g_zones[i].name, name) == 0) {
+            /* Add to cache with default TTL of 60s */
+            dns_cache_add(name, g_zones[i].ip, 60);
             return &g_zones[i];
+        }
     }
     return NULL;
 }
