@@ -37,6 +37,7 @@ All demos are in the `demos/` folder. Each file is fully self-contained — it i
 | [demo.29.dns-security.md](demos/demo.29.dns-security.md) | Phase 17c | DNS security — blocking cache poisoning |
 | [demo.30.dns-spoof-ext.md](demos/demo.30.dns-spoof-ext.md) | Phase 17d | External DNS cache poisoning (Kaminsky-style) |
 | [demo.31.vuln-server.md](demos/demo.31.vuln-server.md) | Phase 18a | Vulnerable application (buffer overflow, format string, integer overflow) |
+| [demo.32.exploit-dev.md](demos/demo.32.exploit-dev.md) | Phase 18b | Exploit development (crash PoC, pattern offset, payload crafting) |
 
 ## Quick Build Reference
 

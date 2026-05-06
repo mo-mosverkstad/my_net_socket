@@ -4076,3 +4076,61 @@ After Phase 18a:
 - 6 application servers running (echo, DNS, KV, HTTP, RPC, vuln)
 - Vulnerable server on port 9999 with 3 exploit classes
 - ASAN catches buffer overflow in Debug builds
+
+---
+
+## Phase 18b: Exploit Development
+
+### What was done
+
+Created an exploit development tool (`ironattack exploit`) that targets the vulnerable server with four attack modes:
+
+1. **Crash PoC** — sends oversized input to trigger stack buffer overflow
+2. **Pattern offset** — sends cyclic pattern to identify exact return address offset
+3. **Payload crafting** — overwrites return address with controlled value (0xDEADBEEFCAFEBABE)
+4. **Format string** — leaks stack memory via %p/%x format specifiers
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironattack/exploit.h` | Exploit subcommand header |
+| `ironattack/exploit.c` | 4 exploit modes: crash, pattern, payload, fmtstr |
+| `demos/demo.32.exploit-dev.md` | Self-contained demo |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironattack/main.c` | Added `exploit` subcommand dispatch + help |
+| `ironattack/CMakeLists.txt` | Added `exploit.c` to build |
+| `DEMO.md` | Added demo.32 entry |
+| `build.md` | Updated ironattack description |
+| `test.md` | Updated ironattack list and demo count |
+
+### How the exploit tool works
+
+The tool connects to the vulnerable server via TCP (port 9999) and sends crafted payloads:
+
+**Crash mode:** `ECHO` + 128 'A's → strcpy overflows 64-byte buffer → ASAN abort
+
+**Pattern mode:** `ECHO` + cyclic pattern (Aa0Aa1Aa2...) → crash → pattern at offset 72 identifies return address location
+
+**Payload mode:** `ECHO` + 72 'A's + 0xDEADBEEFCAFEBABE → overwrites return address with controlled value → proves RIP control
+
+**Format string mode:** `FMT %p.%p.%p...` → leaks stack pointer values without crashing
+
+### Key findings
+
+- Buffer size: 64 bytes
+- Saved RBP offset: 64 (8 bytes)
+- Return address offset: 72 (8 bytes)
+- In Debug builds: ASAN catches overflow at strcpy (before function returns)
+- In Release builds: crash would occur at 0xDEADBEEFCAFEBABE (controlled RIP)
+
+### Current test summary
+
+After Phase 18b:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- ironattack has 11 subcommands (added exploit)
+- Exploit tool demonstrates full exploitation workflow: crash → offset → control
