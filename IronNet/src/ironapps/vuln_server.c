@@ -1,5 +1,6 @@
 /*
  * vuln_server.c — Intentionally vulnerable application (Phase 18a)
+ * with exploit mitigations added (Phase 18c)
  *
  * TCP port 9999 — contains deliberate security flaws for exploitation study:
  *   1. Stack buffer overflow (strcpy into 64-byte buffer)
@@ -11,6 +12,9 @@
  *   FMT <text>      — prints text as format string (format string vuln)
  *   READ <len>      — reads <len> bytes from a buffer (integer overflow in len)
  *   SAFE <text>     — safe echo using strncpy (for comparison)
+ *   CANARY <text>   — echo with stack canary protection (Phase 18c)
+ *   BOUNDS <text>   — echo with bounds checking + input validation (Phase 18c)
+ *   ASLR <text>     — echo with randomized buffer address (Phase 18c)
  *   HELP            — show commands
  *
  * ASAN (Debug build) will catch these at runtime. In Release builds,
@@ -26,6 +30,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #define MODULE "VULN"
 #define VULN_PORT 9999
@@ -34,6 +39,9 @@
 /* Secret data that an attacker might try to leak via format string */
 static const char *g_secret = "SECRET_KEY_12345";
 static int g_auth_flag = 0;
+
+/* Stack canary value (randomized at startup) */
+static uint64_t g_canary = 0;
 
 /*
  * Vulnerability 1: Stack buffer overflow
@@ -114,6 +122,81 @@ static void vuln_echo_safe(const char *input, char *resp, int *resp_len) {
     *resp_len = snprintf(resp, 256, "+SAFE %s\r\n", local_buf);
 }
 
+/*
+ * Mitigation 1: Stack canary (Phase 18c)
+ * A random value is placed between the buffer and the return address.
+ * After copy, we check if the canary was overwritten. If so, report violation.
+ * Note: Uses manual memcpy to simulate overflow without triggering ASAN's
+ * strcpy interceptor (so the canary check actually runs in Debug builds).
+ */
+static void vuln_echo_canary(const char *input, char *resp, int *resp_len) {
+    /* Layout: [local_buf 64B][canary 8B] — canary sits right after buffer */
+    uint8_t frame[VULN_BUF_SIZE + 8];
+    uint64_t *canary_ptr = (uint64_t *)(frame + VULN_BUF_SIZE);
+    *canary_ptr = g_canary; /* Place canary after buffer */
+
+    int input_len = strlen(input);
+
+    /* Copy input into buffer — if > 64 bytes, overwrites canary */
+    int copy_len = input_len < (int)sizeof(frame) ? input_len : (int)sizeof(frame) - 1;
+    memcpy(frame, input, copy_len);
+    frame[copy_len] = 0;
+
+    /* Check canary BEFORE using the buffer */
+    if (*canary_ptr != g_canary) {
+        *resp_len = snprintf(resp, 256,
+            "-CANARY VIOLATION: stack smashing detected! (expected 0x%016lX, got 0x%016lX)\r\n",
+            (unsigned long)g_canary, (unsigned long)*canary_ptr);
+        LOG_WRN(MODULE, "Stack canary violation detected! Overflow blocked.");
+        return;
+    }
+
+    *resp_len = snprintf(resp, 256, "+CANARY %s\r\n", (char *)frame);
+}
+
+/*
+ * Mitigation 2: Bounds checking (Phase 18c)
+ * Validate input length BEFORE copying. Reject oversized input.
+ */
+static void vuln_echo_bounds(const char *input, char *resp, int *resp_len) {
+    int input_len = strlen(input);
+
+    /* MITIGATION: reject input that would overflow the buffer */
+    if (input_len >= VULN_BUF_SIZE) {
+        *resp_len = snprintf(resp, 256,
+            "-BOUNDS REJECTED: input %d bytes exceeds buffer %d bytes\r\n",
+            input_len, VULN_BUF_SIZE - 1);
+        LOG_WRN(MODULE, "Bounds check rejected input: %d bytes (max %d)",
+                input_len, VULN_BUF_SIZE - 1);
+        return;
+    }
+
+    char local_buf[VULN_BUF_SIZE];
+    strncpy(local_buf, input, VULN_BUF_SIZE - 1);
+    local_buf[VULN_BUF_SIZE - 1] = 0;
+
+    *resp_len = snprintf(resp, 256, "+BOUNDS %s\r\n", local_buf);
+}
+
+/*
+ * Mitigation 3: ASLR simulation (Phase 18c)
+ * Randomize the buffer's position by adding a random-sized pad before it.
+ * Attacker can't predict where the buffer (or return address) is.
+ */
+static void vuln_echo_aslr(const char *input, char *resp, int *resp_len) {
+    /* Random pad: 0-256 bytes of dead space before the real buffer */
+    int pad_size = rand() % 256;
+    char pad_and_buf[256 + VULN_BUF_SIZE];
+    char *buf_ptr = pad_and_buf + pad_size; /* Buffer at random offset */
+
+    /* Use strncpy (safe) but report the randomized address */
+    strncpy(buf_ptr, input, VULN_BUF_SIZE - 1);
+    buf_ptr[VULN_BUF_SIZE - 1] = 0;
+
+    *resp_len = snprintf(resp, 256,
+        "+ASLR (buf@offset+%d) %s\r\n", pad_size, buf_ptr);
+}
+
 static void vuln_on_data(int sock_id, uint32_t src_ip, uint16_t src_port,
                          const uint8_t *data, int data_len) {
     (void)sock_id;
@@ -141,9 +224,15 @@ static void vuln_on_data(int sock_id, uint32_t src_ip, uint16_t src_port,
         vuln_read_overflow(cmd + 5, resp, &resp_len);
     } else if (strncmp(cmd, "SAFE ", 5) == 0) {
         vuln_echo_safe(cmd + 5, resp, &resp_len);
+    } else if (strncmp(cmd, "CANARY ", 7) == 0) {
+        vuln_echo_canary(cmd + 7, resp, &resp_len);
+    } else if (strncmp(cmd, "BOUNDS ", 7) == 0) {
+        vuln_echo_bounds(cmd + 7, resp, &resp_len);
+    } else if (strncmp(cmd, "ASLR ", 5) == 0) {
+        vuln_echo_aslr(cmd + 5, resp, &resp_len);
     } else if (strncmp(cmd, "HELP", 4) == 0) {
         resp_len = snprintf(resp, sizeof(resp),
-            "+COMMANDS: ECHO <text>, FMT <text>, READ <len>, SAFE <text>, HELP\r\n");
+            "+COMMANDS: ECHO, FMT, READ, SAFE, CANARY, BOUNDS, ASLR, HELP\r\n");
     } else {
         resp_len = snprintf(resp, sizeof(resp), "-ERR unknown command\r\n");
     }
@@ -155,6 +244,10 @@ static void vuln_on_data(int sock_id, uint32_t src_ip, uint16_t src_port,
 }
 
 int vuln_server_start(void) {
+    /* Initialize stack canary with random value */
+    srand(time(NULL) ^ (uintptr_t)&g_canary);
+    g_canary = ((uint64_t)rand() << 32) | rand();
+
     app_socket_listen(PROTO_TCP, VULN_PORT, vuln_on_data, NULL, NULL);
     LOG_INF(MODULE, "Vulnerable server started on TCP port %d (INTENTIONALLY INSECURE)", VULN_PORT);
     return 0;

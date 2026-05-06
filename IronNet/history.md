@@ -4134,3 +4134,80 @@ After Phase 18b:
 - **18 unit tests + 11 module tests = 29 tests, all passing**
 - ironattack has 11 subcommands (added exploit)
 - Exploit tool demonstrates full exploitation workflow: crash → offset → control
+
+---
+
+## Phase 18c: Exploit Mitigations
+
+### What was done
+
+Added three exploit mitigations to the vulnerable server, each as a separate command so they can be compared side-by-side against the same overflow payload:
+
+1. **Stack canary** (`CANARY` command) — random value between buffer and return address; detects overflow after strcpy but before function returns
+2. **Bounds checking** (`BOUNDS` command) — validates input length before any copy; rejects oversized input entirely
+3. **ASLR simulation** (`ASLR` command) — randomizes buffer position with 0-255 byte random pad; attacker can't predict addresses
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironapps/vuln_server.c` | Added `vuln_echo_canary()`, `vuln_echo_bounds()`, `vuln_echo_aslr()`, canary init at startup, CANARY/BOUNDS/ASLR command dispatch |
+| `DEMO.md` | Added demo.33 entry |
+| `test.md` | Updated demo count |
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `demos/demo.33.exploit-mitigations.md` | Self-contained demo comparing all mitigations |
+
+### How each mitigation works
+
+**Stack canary:**
+```c
+struct { char buf[64]; uint64_t canary; } frame;
+frame.canary = g_canary;       // Place canary
+strcpy(frame.buf, input);      // Overflow happens (overwrites canary)
+if (frame.canary != g_canary)  // DETECTED! Return error instead of crashing
+```
+
+**Bounds checking:**
+```c
+if (strlen(input) >= VULN_BUF_SIZE)  // Check BEFORE copy
+    return error;                     // REJECTED — no overflow possible
+strncpy(buf, input, VULN_BUF_SIZE - 1);  // Safe copy
+```
+
+**ASLR simulation:**
+```c
+int pad = rand() % 256;              // Random offset each time
+char *buf = stack_area + pad;        // Buffer at unpredictable address
+strncpy(buf, input, VULN_BUF_SIZE);  // Safe copy + random position
+```
+
+### Comparison results (same 128-byte payload)
+
+| Command | Mitigation | Overflow? | Detected? | Crash? |
+|---------|-----------|-----------|-----------|--------|
+| ECHO | None | ✅ | ❌ | ✅ (ASAN abort) |
+| CANARY | Stack canary | ✅ | ✅ | ❌ (error returned) |
+| BOUNDS | Bounds check | ❌ | N/A | ❌ (input rejected) |
+| ASLR | Randomization | ❌ (strncpy) | N/A | ❌ (address unknown) |
+
+### Phase 18 complete
+
+All 3 sub-phases of Phase 18 are now done:
+
+| Sub-phase | Component | Status |
+|-----------|-----------|--------|
+| 18a | Vulnerable application (port 9999) | ✅ |
+| 18b | Exploit development (crash/pattern/payload/fmtstr) | ✅ |
+| 18c | Exploit mitigations (canary/bounds/ASLR) | ✅ |
+
+### Current test summary
+
+After Phase 18c:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- Vulnerable server has 7 commands: ECHO, FMT, READ, SAFE, CANARY, BOUNDS, ASLR
+- Exploit tool has 4 modes: crash, pattern, payload, fmtstr
+- Three mitigations demonstrated and compared
