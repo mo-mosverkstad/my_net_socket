@@ -2212,7 +2212,345 @@ Sender (covert)  ──hidden data──→  Receiver (covert)
 
 ---
 
-## Testing Strategy
+## Phase 20: Advanced L2 Attacks (Week 57–58)
+
+This phase is split into 2 sub-phases.
+
+### Goals
+- Demonstrate L2 attacks that exploit switch/bridge behavior
+- Show how MAC table overflow forces a bridge into hub mode
+- Implement defenses (MAC limit, port security)
+
+### Architecture
+
+```
+Attacker → floods random src MACs → Bridge MAC table overflows
+                                     ↓
+                              Bridge falls back to flooding
+                                     ↓
+                              Attacker sees ALL traffic (hub mode)
+```
+
+---
+
+### Phase 20a: MAC Flooding Attack (Week 57)
+
+#### Goals
+- Overflow the bridge's MAC address table with random source MACs
+- Force the bridge into hub mode (flood all frames to all ports)
+- Demonstrate that the attacker can now see traffic between other hosts
+
+#### Tasks
+
+1. **MAC flood attack (`ironattack mac-flood`)**
+   ```bash
+   sudo ./ironattack mac-flood --target 10.0.1.1 --iface iron0 --count 1000 --rate 500
+   ```
+   - Generate Ethernet frames with random source MAC addresses
+   - Each frame has a unique random src MAC (exhausts MAC table)
+   - Send at high rate to fill the table before entries age out
+   - Report: frames sent, estimated table fill percentage
+
+2. **Bridge behavior under flood**
+   - Before flood: bridge forwards unicast to learned port only
+   - During flood: MAC table full → new MACs evict old entries
+   - After table corrupted: legitimate traffic flooded to all ports
+   - Attacker on any port now sees all traffic (like a hub)
+
+3. **Validation**
+   - Before flood: unicast frame A→B only reaches port with B
+   - After flood: unicast frame A→B reaches ALL ports (including attacker)
+   - Bridge stats show: `frames_flooded` increases dramatically
+
+---
+
+### Phase 20b: MAC Flood Defense — Port Security (Week 58)
+
+#### Goals
+- Implement port security: limit number of MACs learned per port
+- Block MAC flooding by refusing to learn beyond the limit
+
+#### Tasks
+
+1. **Port security defense (`defense port-security enable`)**
+   - Configurable max MACs per port (default: 32)
+   - When limit reached: new source MACs on that port are dropped
+   - Audit log: `AUDIT_MAC_FLOOD` event when limit exceeded
+   - `defense port-security <max-macs>` CLI command
+
+2. **MAC flood with defense enabled**
+   - Attacker sends 1000 random MACs
+   - Only first 32 are learned; remaining 968 frames dropped
+   - Bridge continues forwarding unicast correctly (table not corrupted)
+   - Legitimate traffic unaffected
+
+3. **Validation**
+   - Without defense: MAC table overflows, bridge floods everything
+   - With defense: table stays at 32 entries, excess frames dropped
+   - Audit log shows MAC flood attempts blocked
+
+---
+
+### Phase 20 Sub-phase Summary
+
+| Sub-phase | Component | Week | Output |
+|-----------|-----------|------|--------|
+| 20a | MAC flooding attack | Week 57 | Bridge table overflow, hub mode |
+| 20b | Port security defense | Week 58 | MAC limit per port, flood blocked |
+
+---
+
+## Phase 21: Stealth Port Scanning (Week 59–60)
+
+This phase is split into 2 sub-phases.
+
+### Goals
+- Implement advanced port scanning techniques that evade detection
+- Demonstrate how different TCP flag combinations reveal port state
+- Show how decoy scanning hides the attacker's real IP
+
+### Background
+
+Standard SYN scanning (ironprobe-ext) is easily detected because SYN packets to closed ports generate RST responses, and firewalls log SYN attempts. Stealth scans use unusual TCP flag combinations that behave differently:
+
+| Scan type | Flags sent | Open port response | Closed port response |
+|-----------|-----------|-------------------|---------------------|
+| SYN scan | SYN | SYN+ACK | RST |
+| FIN scan | FIN | No response (silence) | RST |
+| XMAS scan | FIN+PSH+URG | No response (silence) | RST |
+| NULL scan | (none) | No response (silence) | RST |
+
+**Key insight:** Open ports silently drop unexpected FIN/XMAS/NULL packets (no response). Closed ports respond with RST. So "no response" = open, "RST" = closed. This is the inverse of SYN scanning.
+
+**Why stealth:** Many firewalls only log SYN packets (connection attempts). FIN/XMAS/NULL packets don't trigger connection tracking and may pass through stateless firewalls undetected.
+
+---
+
+### Phase 21a: FIN, XMAS, and NULL Scans (Week 59)
+
+#### Goals
+- Implement three stealth scan types in ironattack
+- Demonstrate different responses from open vs closed ports
+
+#### Tasks
+
+1. **Stealth scan tool (`ironattack stealth-scan`)**
+   ```bash
+   sudo ./ironattack stealth-scan --target 10.0.1.1 --ports 1-100 --mode fin|xmas|null [--iface <name>]
+   ```
+   - FIN scan: send TCP packet with only FIN flag set
+   - XMAS scan: send TCP packet with FIN+PSH+URG flags ("Christmas tree")
+   - NULL scan: send TCP packet with no flags set
+   - Listen for RST responses (closed) vs silence (open|filtered)
+   - Report: open/closed/filtered per port
+
+2. **Scan result interpretation**
+   - RST received → port is CLOSED
+   - No response (timeout) → port is OPEN or FILTERED
+   - ICMP unreachable → port is FILTERED
+
+3. **Comparison with SYN scan**
+   - Run SYN scan and stealth scan against same target
+   - Show that both identify the same open ports
+   - Show that stealth scan generates fewer log entries
+
+4. **Validation**
+   - FIN scan: ports 7,53,6379,8080,9000,9999 show as open (no RST)
+   - FIN scan: port 22 shows as closed (RST received) or filtered
+   - XMAS and NULL scans produce same results as FIN scan
+
+---
+
+### Phase 21b: Decoy Scanning (Week 60)
+
+#### Goals
+- Hide the attacker's real IP among multiple fake source IPs
+- Make it difficult for the target to identify the real scanner
+
+#### Tasks
+
+1. **Decoy scan tool (`ironattack stealth-scan --decoys`)**
+   ```bash
+   sudo ./ironattack stealth-scan --target 10.0.1.1 --ports 7,80,22 --mode syn \
+       --decoys 10.0.1.50,10.0.1.51,10.0.1.52 [--iface <name>]
+   ```
+   - For each port: send SYN from real IP AND from each decoy IP
+   - All SYNs sent in random order (real IP mixed among decoys)
+   - Target sees SYN from 4 different IPs — can't tell which is real
+   - Only the real IP receives the SYN+ACK (decoys don't respond)
+
+2. **Decoy effectiveness**
+   - Target's audit log shows SYN from 4 IPs for each port
+   - Without additional analysis, defender can't identify the real scanner
+   - Defense: rate limiting per-source helps but doesn't eliminate the problem
+
+3. **Validation**
+   - Scan with 3 decoys: target logs show 4 source IPs per port
+   - Real scanner correctly identifies open/closed ports
+   - Decoy IPs appear in audit log alongside real IP
+
+---
+
+### Phase 21 Sub-phase Summary
+
+| Sub-phase | Component | Week | Output |
+|-----------|-----------|------|--------|
+| 21a | FIN/XMAS/NULL stealth scans | Week 59 | Stealth port discovery |
+| 21b | Decoy scanning | Week 60 | Scanner IP obfuscation |
+
+---
+
+## Phase 22: TCP Session Hijacking (Week 61–62)
+
+This phase is split into 2 sub-phases.
+
+### Goals
+- Demonstrate taking over an established TCP session
+- Inject data into an active connection as if from the legitimate client
+- Show how sequence number prediction enables session hijacking
+- Implement defense: TCP timestamps and challenge ACKs
+
+### Architecture
+
+```
+Client (10.0.1.2) ←→ Server (10.0.1.1:7 echo)
+         ↑
+    Attacker observes traffic (via MITM or sniffing)
+    Learns: src_port, seq number, ack number
+         ↓
+    Attacker injects data packet:
+      src_ip = client IP (spoofed)
+      seq = predicted next sequence number
+      payload = attacker's data
+         ↓
+    Server accepts data as if from client!
+```
+
+### Key difference from RST injection
+
+- **RST injection** (Phase 13c): kills the connection (destructive)
+- **Session hijacking** (Phase 22): injects data into the connection (constructive — attacker takes control)
+
+---
+
+### Phase 22a: TCP Session Hijacking Attack (Week 61)
+
+#### Goals
+- Inject data into an established TCP connection
+- Demonstrate that the server processes attacker's data as legitimate
+
+#### Tasks
+
+1. **Session hijack tool (`ironattack session-hijack`)**
+   ```bash
+   sudo ./ironattack session-hijack --target 10.0.1.1 --port 7 \
+       --client 10.0.1.2 --sport <port> --seq <n> --ack <n> \
+       --inject "HIJACKED DATA" [--iface <name>]
+   ```
+   - Craft TCP data packet with:
+     - Source IP = client's IP (spoofed)
+     - Source port = client's port
+     - Sequence number = next expected by server
+     - ACK number = server's current seq
+     - Payload = attacker's injected data
+   - Server accepts the packet as part of the legitimate session
+   - Echo server echoes back the injected data (proving acceptance)
+
+2. **Sequence number prediction**
+   - In IronNet, the server's initial seq is predictable (starts at 1000)
+   - After handshake: client seq = 1001, server seq = 1001
+   - After client sends N bytes: client seq = 1001 + N
+   - Attacker who knows N can predict the next seq number
+   - Tool accepts `--seq` and `--ack` for manual specification
+
+3. **Attack workflow**
+   ```
+   Step 1: Client connects to echo server (port 7)
+   Step 2: Client sends "hello" (5 bytes) → client seq advances to 1006
+   Step 3: Attacker injects with seq=1006, ack=1006
+   Step 4: Server accepts injected data, echoes it back
+   Step 5: Client's next packet has wrong seq → connection desynchronized
+   ```
+
+4. **Validation**
+   - Inject "HIJACKED" into echo session → server echoes "HIJACKED"
+   - Server's TCP state shows advanced seq (accepted the data)
+   - Original client is now desynchronized (its packets rejected)
+
+---
+
+### Phase 22b: Session Hijacking Defense (Week 62)
+
+#### Goals
+- Implement defenses that make session hijacking difficult or detectable
+
+#### Tasks
+
+1. **Challenge ACK defense**
+   - When a data packet arrives with unexpected seq (out of window):
+     - Don't silently drop — send a challenge ACK back
+     - Challenge ACK contains the server's current seq/ack
+     - Legitimate client responds correctly; attacker can't (doesn't see the ACK)
+   - `defense challenge-ack enable`
+
+2. **TCP window strictness**
+   - Tighten the acceptable sequence number window
+   - Only accept data within a narrow range of `rcv_nxt`
+   - Reduces the attacker's guessing space
+   - `defense tcp-strict-window enable`
+
+3. **Connection anomaly detection**
+   - Detect sequence number jumps (sudden large advance)
+   - Detect duplicate data from different source (desynchronization indicator)
+   - Audit log: `AUDIT_SESSION_HIJACK` event
+
+4. **Validation**
+   - Without defense: hijack succeeds, data injected
+   - With challenge-ack: server sends challenge, attacker can't respond
+   - With strict window: injected packet outside window → dropped
+   - Audit log shows hijack attempt detected
+
+---
+
+### Phase 22 Sub-phase Summary
+
+| Sub-phase | Component | Week | Output |
+|-----------|-----------|------|--------|
+| 22a | TCP session hijacking attack | Week 61 | Data injection into active session |
+| 22b | Session hijacking defense | Week 62 | Challenge ACK + strict window |
+
+---
+
+## Summary Timeline (Updated)
+
+| Phase | Component | Duration |
+|-------|-----------|----------|
+| 1 | Foundation & Build | Week 1–2 |
+| 2 | Virtual NIC & L2 | Week 3–4 |
+| 3 | L3 IP & Routing | Week 5–7 |
+| 4 | ACL & PBR | Week 8–9 |
+| 5 | UDP & TCP | Week 10–14 |
+| 6 | IPsec (simulated) | Week 15–16 |
+| 7 | Virtual Router (end-to-end) | Week 17–18 |
+| 8 | VLAN, Bridge, NAT & Connection Tracking | Week 19–21 |
+| 9 | ironctl (CLI) | Week 21–22 |
+| 10 | ironmon (telemetry) | Week 23–24 |
+| 11 | ironapps (socket API + target apps) | Week 25–28 |
+| 12 | ironfuzz / ironprobe / ironload | Week 29–34 |
+| 13 | Attack Simulation & Defense | Week 35–40 |
+| 14 | ironsim (network emulator) | Week 41–42 |
+| 15 | irontrace (capture/replay) | Week 43–44 |
+| 16 | Man-in-the-Middle (MITM) | Week 45–47 |
+| 17 | DNS Poisoning & Hijacking | Week 48–50 |
+| 18 | Buffer Overflow Exploitation | Week 51–53 |
+| 19 | Covert Channels & Traffic Analysis | Week 54–56 |
+| 20 | Advanced L2 Attacks (MAC flooding) | Week 57–58 |
+| 21 | Stealth Port Scanning | Week 59–60 |
+| 22 | TCP Session Hijacking | Week 61–62 |
+
+**Total estimated duration: ~16 months (part-time development)**
+
+---
 
 ### Unit Tests (`src/tests/unit/`)
 - Fast, minimal-output correctness checks
@@ -2284,34 +2622,6 @@ Sender (covert)  ──hidden data──→  Receiver (covert)
 
 ---
 
-## Summary Timeline
-
-| Phase | Component | Duration |
-|-------|-----------|----------|
-| 1 | Foundation & Build | Week 1–2 |
-| 2 | Virtual NIC & L2 | Week 3–4 |
-| 3 | L3 IP & Routing | Week 5–7 |
-| 4 | ACL & PBR | Week 8–9 |
-| 5 | UDP & TCP | Week 10–14 |
-| 6 | IPsec (simulated) | Week 15–16 |
-| 7 | Virtual Router (end-to-end) | Week 17–18 |
-| 8 | VLAN, Bridge, NAT & Connection Tracking | Week 19–21 |
-| 9 | ironctl (CLI) | Week 21–22 |
-| 10 | ironmon (telemetry) | Week 23–24 |
-| 11 | ironapps (socket API + target apps) | Week 25–28 |
-| 12 | ironfuzz / ironprobe / ironload | Week 29–34 |
-| 13 | Attack Simulation & Defense | Week 35–40 |
-| 14 | ironsim (network emulator) | Week 41–42 |
-| 15 | irontrace (capture/replay) | Week 43–44 |
-| 16 | Man-in-the-Middle (MITM) | Week 45–47 |
-| 17 | DNS Poisoning & Hijacking | Week 48–50 |
-| 18 | Buffer Overflow Exploitation | Week 51–53 |
-| 19 | Covert Channels & Traffic Analysis | Week 54–56 |
-
-**Total estimated duration: ~14 months (part-time development)**
-
----
-
 ## Next Steps
 
 1. ~~Set up WSL Ubuntu development environment~~ ✅
@@ -2322,7 +2632,8 @@ Sender (covert)  ──hidden data──→  Receiver (covert)
 6. ~~Phase 4: ACL & PBR engines~~ ✅
 7. ~~Phase 5: L4 UDP & TCP~~ ✅
 8. ~~Phase 6: IPsec (simulated)~~ ✅
-9. Begin Phase 7: Virtual Router (end-to-end integration)
+9. ~~Phase 7-19: All original phases complete~~ ✅
+10. Begin Phase 20: Advanced L2 Attacks (MAC flooding)
 
 ---
 
