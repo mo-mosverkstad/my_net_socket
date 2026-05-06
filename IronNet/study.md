@@ -1016,6 +1016,34 @@ Attack tools are **separate binaries** that:
 
 ### Phase 13a: Infrastructure + SYN Flood Attack/Defense (Week 35–36)
 
+#### DoS and DDoS Concepts
+
+**Denial of Service (DoS)** makes a service unavailable by exhausting its resources. Three categories:
+
+| Category | Target | Example | IronNet demo |
+|----------|--------|---------|-------------|
+| **Volumetric** | Bandwidth | UDP flood, DNS amplification | ironload bandwidth test |
+| **Protocol** | Connection state | SYN flood, RST flood | ironattack syn-flood |
+| **Application** | App resources | Slowloris, HTTP flood | ironattack slowloris |
+
+**DDoS (Distributed DoS):** Same attacks launched from many sources simultaneously. Harder to block because traffic comes from thousands of IPs (can't just block one source).
+
+**Amplification attacks:** Attacker sends small request with spoofed source IP to a reflector (DNS, NTP, memcached). Reflector sends large response to the victim. Amplification factor: DNS=28x-54x, NTP=556x, memcached=51000x.
+
+```
+Attacker (spoofed src=victim) → DNS server: "query ANY for example.com" (60 bytes)
+DNS server → Victim: full response (3000 bytes) — 50x amplification!
+```
+
+**IronNet demonstrates DoS through:**
+- `ironattack syn-flood` — protocol-layer DoS (fills TCP connection table)
+- `ironattack slowloris` — application-layer DoS (holds connections open)
+- `ironload tcp` — measures exact resource limits (256 connections)
+- `ironattack mac-flood` (Phase 20) — L2 DoS (bridge table overflow)
+- `defense syn-cookies` + `defense rate-limit` — mitigation
+
+**Why no separate DDoS phase:** DDoS is the same attack from multiple sources. ironsim can simulate this by running `syn-flood` from multiple nodes simultaneously. No new attack logic is needed — the defense (rate limiting, SYN cookies) works the same regardless of source count.
+
 #### Goals
 - Build the ironattack binary skeleton with TAP-based packet crafting
 - Implement SYN flood attack (first external attack)

