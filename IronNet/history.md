@@ -3576,3 +3576,73 @@ After Phase 15 (complete):
 - Internal replay: full bidirectional via vnic_inject()
 - pcap files compatible with tcpdump and Wireshark
 - Regression workflow documented with examples
+
+---
+
+## Phase 16a: MITM Relay Engine (ironmitm)
+
+### What was done
+
+Created `ironmitm` — a Man-in-the-Middle relay engine that:
+1. ARP-poisons both victims bidirectionally (A thinks B is at attacker MAC, B thinks A is at attacker MAC)
+2. Sniffs all intercepted traffic via promiscuous AF_PACKET socket
+3. Logs intercepted packets (direction, src/dst IP:port, protocol, size)
+4. Forwards packets to the real destination by rewriting MAC addresses
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironattack/mitm.c` | ironmitm binary: ARP poisoning, packet sniffing, logging, forwarding |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironattack/CMakeLists.txt` | Added ironmitm binary |
+
+### Usage
+
+```bash
+# Basic MITM between two nodes
+sudo ./ironattack/ironmitm --victim-a 10.0.1.1 --victim-b 10.0.1.2 --iface iron0
+
+# With traffic logging to file
+sudo ./ironattack/ironmitm --victim-a 10.0.1.1 --victim-b 10.0.1.2 --iface iron0 --log /tmp/mitm.log
+```
+
+### How it works
+
+1. Opens AF_PACKET socket in promiscuous mode on the specified interface
+2. Every 2 seconds: sends ARP replies to both victims claiming the other's IP is at attacker's MAC
+3. Sniffs all packets addressed to attacker's MAC (intercepted traffic)
+4. For each intercepted IPv4 packet:
+   - Logs: direction, src IP:port, dst IP:port, protocol, size
+   - Rewrites destination MAC to real victim's MAC
+   - Forwards via sendto()
+5. On Ctrl+C: prints statistics and saves log
+
+### Architecture
+
+```
+Victim A (10.0.1.1)                    Victim B (10.0.1.2)
+     |                                       |
+     | "B is at DE:AD:BE:EF:01"              | "A is at DE:AD:BE:EF:01"
+     |                                       |
+     +--------→ ironmitm (sniff + log) ←-----+
+                    |
+                    | forward with real MACs
+                    v
+              Both victims communicate
+              but attacker sees everything
+```
+
+### Current test summary
+
+After Phase 16a:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- ironmitm binary built and functional
+- ARP poisoning + packet interception + logging working
+- Known limitation: forwarding creates loops on single-TAP setup (architectural)
+- Recommendation: use ironsim 3-node topology for full bidirectional MITM
+- Phase 16b (traffic modification) should target the ironsim multi-node topology
