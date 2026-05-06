@@ -18,6 +18,7 @@
 #include "../ironapps/kv_server.h"
 #include "../ironapps/http_server.h"
 #include "../ironapps/rpc_server.h"
+#include "../ironapps/vuln_server.h"
 #include "../security/defense.h"
 #include "../irontrace/trace.h"
 
@@ -58,6 +59,7 @@ int iron_pipeline_init(void) {
     kv_server_start();
     http_server_start();
     rpc_server_start();
+    vuln_server_start();
 
     /* Load config file if specified */
     if (g_conf_file) {

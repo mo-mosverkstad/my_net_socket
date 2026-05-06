@@ -5,6 +5,7 @@ add_library(iron_apps STATIC
     kv_server.c
     http_server.c
     rpc_server.c
+    vuln_server.c
 )
 target_include_directories(iron_apps PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}

@@ -4013,3 +4013,66 @@ After Phase 17d:
 - ironattack has 10 subcommands (added dns-spoof-ext)
 - External DNS cache poisoning demonstrated and defended
 - `dig` responses now properly formatted (EDNS0 fix)
+
+---
+
+## Phase 18a: Vulnerable Application
+
+### What was done
+
+Created an intentionally vulnerable TCP server (port 9999) with three exploit classes for security research and exploitation practice:
+
+1. **Stack buffer overflow** — `strcpy()` into 64-byte buffer without bounds checking
+2. **Format string vulnerability** — user input passed directly as format string to `snprintf()`
+3. **Integer overflow** — length field cast to `uint8_t` (truncation) while copy uses original `int` value
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironapps/vuln_server.h` | Vulnerable server API |
+| `ironapps/vuln_server.c` | TCP port 9999: ECHO (overflow), FMT (format string), READ (int overflow), SAFE (comparison) |
+| `demos/demo.31.vuln-server.md` | Self-contained demo |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironapps/CMakeLists.txt` | Added `vuln_server.c` to build |
+| `ironstack/core/pipeline.c` | Added `vuln_server.h` include and `vuln_server_start()` call |
+| `DEMO.md` | Added demo.31 entry |
+
+### Commands
+
+| Command | Vulnerability | Effect |
+|---------|--------------|--------|
+| `ECHO <128+ bytes>` | Stack buffer overflow (CWE-121) | ASAN abort in Debug, segfault in Release |
+| `FMT %x.%x.%x` | Format string (CWE-134) | Leaks stack memory values |
+| `READ 257` | Integer overflow (CWE-190) | alloc_size=1 but copies 257 bytes |
+| `SAFE <text>` | None (safe comparison) | Truncates to 63 chars, no crash |
+
+### Design decisions
+
+1. **ASAN catches overflow** — In Debug builds, AddressSanitizer immediately detects the stack-buffer-overflow and aborts. This demonstrates how compile-time instrumentation prevents exploitation.
+
+2. **Format string uses snprintf** — We use `snprintf` (not `printf`) so `%n` (write to memory) is not exploitable. But `%x` and `%p` still leak stack values, demonstrating information disclosure.
+
+3. **Integer overflow is bounded** — The `data_pool` is a static 256-byte buffer, so even with truncation mismatch, reads are bounded. This demonstrates the concept without causing actual memory corruption in the demo.
+
+4. **Server auto-starts** — The vulnerable server starts automatically with ironstack, available on port 9999 alongside the other services.
+
+### Verified results
+
+- Normal ECHO (short input): responds correctly ✅
+- ECHO with 128 bytes: ASAN detects stack-buffer-overflow ✅
+- FMT with %x: leaks hex values from stack ✅
+- READ with 257: shows alloc=1 but reads 256 bytes ✅
+- SAFE with 128 bytes: truncates to 63 chars, no crash ✅
+
+### Current test summary
+
+After Phase 18a:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- 6 application servers running (echo, DNS, KV, HTTP, RPC, vuln)
+- Vulnerable server on port 9999 with 3 exploit classes
+- ASAN catches buffer overflow in Debug builds
