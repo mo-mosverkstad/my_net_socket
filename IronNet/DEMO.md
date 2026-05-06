@@ -39,6 +39,7 @@ All demos are in the `demos/` folder. Each file is fully self-contained — it i
 | [demo.31.vuln-server.md](demos/demo.31.vuln-server.md) | Phase 18a | Vulnerable application (buffer overflow, format string, integer overflow) |
 | [demo.32.exploit-dev.md](demos/demo.32.exploit-dev.md) | Phase 18b | Exploit development (crash PoC, pattern offset, payload crafting) |
 | [demo.33.exploit-mitigations.md](demos/demo.33.exploit-mitigations.md) | Phase 18c | Exploit mitigations (stack canary, bounds checking, ASLR) |
+| [demo.34.covert-channels.md](demos/demo.34.covert-channels.md) | Phase 19a | Covert channels (ICMP payload, TCP ISN, DNS subdomain) |
 
 ## Quick Build Reference
 

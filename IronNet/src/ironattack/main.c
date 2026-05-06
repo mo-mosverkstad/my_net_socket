@@ -1,6 +1,7 @@
 #include "craft.h"
 #include "dns_spoof_ext.h"
 #include "exploit.h"
+#include "covert.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +24,7 @@ static void usage(void) {
     fprintf(stderr, "  dns-spoof  --domain <name> --fake-ip <ip> --target <ip> [--count <n>] [--iface <name>]\n");
     fprintf(stderr, "  dns-spoof-ext --domain <name> --fake-ip <ip> --target <ip> [--count <n>] [--iface <name>]\n");
     fprintf(stderr, "  exploit  --target <ip> [--mode crash|pattern|payload|fmtstr] [--size <n>]\n");
+    fprintf(stderr, "  covert   --target <ip> --mode icmp|isn|dns --message <text> [--iface <name>]\n");
     fprintf(stderr, "\nAll commands require sudo (raw socket access).\n");
 }
 
@@ -650,6 +652,8 @@ int main(int argc, char **argv) {
         return cmd_dns_spoof_ext(argc - 2, argv + 2);
     } else if (strcmp(cmd, "exploit") == 0) {
         return cmd_exploit(argc - 2, argv + 2);
+    } else if (strcmp(cmd, "covert") == 0) {
+        return cmd_covert(argc - 2, argv + 2);
     } else if (strcmp(cmd, "--help") == 0 || strcmp(cmd, "-h") == 0) {
         usage();
         return 0;

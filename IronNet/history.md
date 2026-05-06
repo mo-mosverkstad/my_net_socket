@@ -4211,3 +4211,67 @@ After Phase 18c:
 - Vulnerable server has 7 commands: ECHO, FMT, READ, SAFE, CANARY, BOUNDS, ASLR
 - Exploit tool has 4 modes: crash, pattern, payload, fmtstr
 - Three mitigations demonstrated and compared
+
+---
+
+## Phase 19a: Covert Channels — Data Hiding in Protocol Fields
+
+### What was done
+
+Created a covert channel tool (`ironattack covert`) that hides secret messages in protocol fields that are normally ignored or appear random:
+
+1. **ICMP payload** — message encoded in ping echo request payload (normally random bytes)
+2. **TCP ISN** — 4 bytes of data per SYN packet encoded in the Initial Sequence Number
+3. **DNS subdomain** — message base64-encoded as a DNS query label
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironattack/covert.h` | Covert channel subcommand header |
+| `ironattack/covert.c` | Three covert channels: ICMP, ISN, DNS |
+| `demos/demo.34.covert-channels.md` | Self-contained demo |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironattack/main.c` | Added `covert` subcommand dispatch + help |
+| `ironattack/CMakeLists.txt` | Added `covert.c` to build |
+| `DEMO.md` | Added demo.34 entry |
+| `build.md` | Updated ironattack description |
+| `test.md` | Updated ironattack list and demo count |
+
+### How each channel works
+
+**ICMP payload:**
+- Builds ICMP echo request with message as payload instead of random bytes
+- Looks like normal ping traffic to observers
+- Bandwidth: entire message in one packet
+
+**TCP ISN:**
+- Splits message into 4-byte chunks
+- Each chunk becomes the sequence number of a TCP SYN packet
+- ISNs are supposed to be random, so encoded data is indistinguishable
+- Bandwidth: 4 bytes per SYN packet
+
+**DNS subdomain:**
+- Base64-encodes the message
+- Sends as DNS query: `<base64>.covert.ironnet.local`
+- Looks like normal DNS lookup for a CDN or tracking subdomain
+- Bandwidth: up to 63 bytes per query label
+
+### Channel comparison
+
+| Channel | Bandwidth | Stealth | Real-world tool |
+|---------|-----------|---------|-----------------|
+| ICMP | High | Medium | ptunnel, icmpsh |
+| TCP ISN | Low (4B/pkt) | High | covert_tcp |
+| DNS subdomain | Medium (63B/query) | Medium | iodine, dnscat2 |
+
+### Current test summary
+
+After Phase 19a:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- ironattack has 12 subcommands (added covert)
+- Three covert channel implementations demonstrated
