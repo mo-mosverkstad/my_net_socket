@@ -1795,7 +1795,7 @@ Victim A (10.0.1.1)  ←→  Attacker (MITM relay)  ←→  Victim B / Server (1
 
 ## Phase 17: DNS Poisoning & Hijacking (Week 48–50)
 
-This phase is split into 3 sub-phases.
+This phase is split into 4 sub-phases.
 
 ### Goals
 - Demonstrate DNS cache poisoning and response spoofing
@@ -1897,6 +1897,44 @@ Client → DNS query → ironstack DNS server (port 53)
 
 ---
 
+### Phase 17d: External DNS Cache Poisoning (Week 50)
+
+#### Goals
+- Implement a realistic external DNS cache poisoning tool (Kaminsky-style)
+- Demonstrate that UDP-based attacks traverse the TAP device successfully
+- Validate that `dns-validate` defense blocks external poisoning
+
+#### Tasks
+
+1. **External DNS spoof tool (`ironattack/dns_spoof_ext.c`)**
+   ```bash
+   sudo ./ironattack dns-spoof-ext --domain ironnet.local --fake-ip 10.0.99.1 \
+       --target 10.0.1.1 --iface iron0 [--count <n>]
+   ```
+   - Floods forged DNS responses with random transaction IDs (Kaminsky-style brute-force)
+   - Source IP spoofed as upstream DNS server (8.8.8.8) to look legitimate
+   - Sends via IPPROTO_RAW socket bound to TAP interface
+   - ironstack's DNS server accepts responses (QR=1) and caches the answer
+
+2. **DNS server response acceptance**
+   - DNS server checks QR flag: QR=0 → normal query, QR=1 → treat as upstream response
+   - Responses are parsed for answer section (A record IP)
+   - Answer is cached via `dns_cache_add_secure()` (defense-aware)
+   - Simulates a recursive resolver accepting upstream responses
+
+3. **Integration with existing defenses**
+   - Without `dns-validate`: forged response accepted, cache poisoned
+   - With `dns-validate`: `dns_cache_add_secure()` rejects mismatched IP, audit logged
+   - Demonstrates full attack→defense cycle via external tool
+
+4. **Validation**
+   - Send 50 forged responses → cache poisoned to fake IP (without defense)
+   - Enable `dns-validate` → repeat attack → cache NOT poisoned
+   - Audit log shows blocked attempts
+   - `dig` confirms poisoned/clean cache from external client
+
+---
+
 ### Phase 17 Sub-phase Summary
 
 | Sub-phase | Component | Week | Output |
@@ -1904,6 +1942,7 @@ Client → DNS query → ironstack DNS server (port 53)
 | 17a | DNS response spoofing | Week 48 | Forged DNS replies redirect domains |
 | 17b | DNS cache poisoning | Week 49 | Persistent cache corruption |
 | 17c | DNS security defenses | Week 50 | Source port randomization + HMAC validation |
+| 17d | External DNS cache poisoning | Week 50 | Kaminsky-style attack via raw socket |
 
 ---
 

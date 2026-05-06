@@ -105,6 +105,11 @@ trace start <file> [l2|l3|l4|all]   - Start packet capture to pcap file
 trace stop                          - Stop capture
 trace replay <file>                 - Replay pcap file (internal injection)
 trace status                        - Show capture state
+dns lookup <domain>                 - Query DNS zone table
+dns spoof-test <domain> <ip>        - Poison a DNS zone entry
+dns cache-poison <domain> <ip> <ttl> - Inject poisoned cache entry
+dns cache                           - Show DNS cache entries
+dns cache-flush                     - Clear DNS cache
 help                    - Show this help
 exit                    - Stop the router
 ```
@@ -118,6 +123,7 @@ Available defenses:
 - `urpf` — Validate source IP reachable via ingress interface (strict mode: no route = drop)
 - `conn-timeout` — Close idle ESTABLISHED connections after N seconds (slowloris defense)
 - `frag-strict` — Reject overlapping and tiny IP fragments
+- `icmp-redirect-disable` — Ignore incoming ICMP redirect messages
 - `mitm-detect` — Alert on ARP MAC flapping (possible MITM indicator)
 - `dns-validate` — Validate DNS cache entries against authoritative zone table
 
@@ -279,7 +285,7 @@ cd IronNet && mkdir -p build && cd build && cmake ../src -DCMAKE_BUILD_TYPE=Debu
 | libiron_probe.a | `build/ironprobe/libiron_probe.a` | Library | Network scanner |
 | libiron_fuzz.a | `build/ironfuzz/libiron_fuzz.a` | Library | Protocol fuzzer |
 | libiron_load.a | `build/ironload/libiron_load.a` | Library | Stress tester |
-| ironattack | `build/ironattack/ironattack` | Binary | External attack tool (syn-flood, arp-spoof, vlan-hop, rst-inject, ip-spoof, slowloris, frag-attack, icmp-redirect, dns-spoof) |
+| ironattack | `build/ironattack/ironattack` | Binary | External attack tool (syn-flood, arp-spoof, vlan-hop, rst-inject, ip-spoof, slowloris, frag-attack, icmp-redirect, dns-spoof, dns-spoof-ext) |
 | ironmitm | `build/ironattack/ironmitm` | Binary | MITM relay engine (ARP poison + sniff + log + modify). Full forwarding works in ironsim multi-node topology |
 | ironprobe-ext | `build/ironprobe_ext/ironprobe-ext` | Binary | External real SYN scanner via raw socket |
 | ironreport | `build/ironprobe_ext/ironreport` | Binary | Automated attack-defense report (5 test pairs) |

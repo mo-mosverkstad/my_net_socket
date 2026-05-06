@@ -224,15 +224,34 @@ static int dns_build_response(const uint8_t *query, int query_len,
                               uint32_t answer_ip, uint8_t *resp, int resp_max) {
     if (query_len < 12 || resp_max < DNS_MAX_RESPONSE) return -1;
 
-    /* Copy query as base for response */
-    int resp_len = query_len;
+    /* Parse past the question section to find its end */
+    /* We only copy header + question, ignoring any additional records (EDNS0 OPT) */
+    int pos = 12; /* skip DNS header */
+    dns_header_t *qhdr = (dns_header_t *)query;
+    uint16_t qdcount = iron_ntohs(qhdr->qdcount);
+
+    for (int q = 0; q < qdcount && pos < query_len; q++) {
+        /* Skip QNAME (labels) */
+        while (pos < query_len) {
+            uint8_t label_len = query[pos];
+            if (label_len == 0) { pos++; break; }
+            if (label_len >= 0xC0) { pos += 2; break; } /* pointer */
+            pos += 1 + label_len;
+        }
+        pos += 4; /* QTYPE(2) + QCLASS(2) */
+    }
+
+    /* Copy only header + question section */
+    int resp_len = pos;
     if (resp_len > resp_max) return -1;
     memcpy(resp, query, resp_len);
 
     dns_header_t *hdr = (dns_header_t *)resp;
-    /* Set response flags: QR=1, AA=1, RCODE=0 */
-    hdr->flags = iron_htons(0x8400);
+    /* Set response flags: QR=1, AA=1, RD=1, RA=1, RCODE=0 */
+    hdr->flags = iron_htons(0x8580);
     hdr->ancount = iron_htons(1);
+    hdr->nscount = 0;
+    hdr->arcount = 0;
 
     /* Append answer: name pointer + type A + class IN + TTL + rdlength + IP */
     uint8_t answer[] = {
@@ -255,15 +274,58 @@ static int dns_build_response(const uint8_t *query, int query_len,
 /* Build NXDOMAIN response */
 static int dns_build_nxdomain(const uint8_t *query, int query_len,
                               uint8_t *resp, int resp_max) {
-    if (query_len < 12 || query_len > resp_max) return -1;
-    memcpy(resp, query, query_len);
+    if (query_len < 12 || resp_max < DNS_MAX_RESPONSE) return -1;
+
+    /* Parse past question section only */
+    int pos = 12;
+    dns_header_t *qhdr = (dns_header_t *)query;
+    uint16_t qdcount = iron_ntohs(qhdr->qdcount);
+
+    for (int q = 0; q < qdcount && pos < query_len; q++) {
+        while (pos < query_len) {
+            uint8_t label_len = query[pos];
+            if (label_len == 0) { pos++; break; }
+            if (label_len >= 0xC0) { pos += 2; break; }
+            pos += 1 + label_len;
+        }
+        pos += 4;
+    }
+
+    int resp_len = pos;
+    if (resp_len > resp_max) return -1;
+    memcpy(resp, query, resp_len);
 
     dns_header_t *hdr = (dns_header_t *)resp;
-    /* QR=1, AA=1, RCODE=3 (NXDOMAIN) */
-    hdr->flags = iron_htons(0x8403);
+    /* QR=1, AA=1, RD=1, RA=1, RCODE=3 (NXDOMAIN) */
+    hdr->flags = iron_htons(0x8583);
     hdr->ancount = 0;
+    hdr->nscount = 0;
+    hdr->arcount = 0;
 
-    return query_len;
+    return resp_len;
+}
+
+/* Parse answer section to extract IP from A record */
+static uint32_t dns_parse_answer_ip(const uint8_t *data, int data_len, int ans_offset) {
+    int pos = ans_offset;
+    /* Skip name (pointer or labels) */
+    if (pos >= data_len) return 0;
+    if (data[pos] >= 0xC0) pos += 2; /* pointer */
+    else {
+        while (pos < data_len && data[pos] != 0) pos += 1 + data[pos];
+        pos++; /* skip null terminator */
+    }
+    /* TYPE(2) + CLASS(2) + TTL(4) + RDLENGTH(2) + RDATA */
+    if (pos + 10 > data_len) return 0;
+    uint16_t rtype = (data[pos] << 8) | data[pos + 1];
+    uint16_t rdlen = (data[pos + 8] << 8) | data[pos + 9];
+    pos += 10;
+    if (rtype == 1 && rdlen == 4 && pos + 4 <= data_len) { /* Type A */
+        uint32_t ip;
+        memcpy(&ip, data + pos, 4);
+        return ip;
+    }
+    return 0;
 }
 
 static void dns_on_query(int sock_id, uint32_t src_ip, uint16_t src_port,
@@ -273,7 +335,34 @@ static void dns_on_query(int sock_id, uint32_t src_ip, uint16_t src_port,
     if (data_len < 12) return; /* Too short for DNS header */
 
     dns_header_t *qhdr = (dns_header_t *)data;
+    uint16_t flags = iron_ntohs(qhdr->flags);
     uint16_t qdcount = iron_ntohs(qhdr->qdcount);
+
+    /* Check if this is a RESPONSE (QR=1) — treat as cache update */
+    if (flags & 0x8000) {
+        /* This is a DNS response arriving on port 53 (simulates recursive resolver
+         * accepting upstream responses). Extract answer and cache it. */
+        uint16_t ancount = iron_ntohs(qhdr->ancount);
+        if (qdcount == 0 || ancount == 0) return;
+
+        char qname[DNS_MAX_NAME];
+        int pos = dns_parse_name(data, 12, data_len, qname, sizeof(qname));
+        if (pos < 0) return;
+        pos += 4; /* skip QTYPE + QCLASS */
+
+        uint32_t answer_ip = dns_parse_answer_ip(data, data_len, pos);
+        if (answer_ip == 0) return;
+
+        char ip_buf[16];
+        LOG_INF(MODULE, "Received DNS response: %s -> %s (caching)",
+                qname, iron_ip_to_str(answer_ip, ip_buf, sizeof(ip_buf)));
+
+        /* Use secure add — dns-validate defense can block this */
+        dns_cache_add_secure(qname, answer_ip, 300);
+        return;
+    }
+
+    /* Normal query (QR=0) */
     if (qdcount == 0) return;
 
     /* Parse question name */

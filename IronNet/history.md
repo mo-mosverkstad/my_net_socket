@@ -3924,13 +3924,14 @@ ironnet.local -> 10.0.1.1              ← real IP preserved!
 
 ### Phase 17 complete
 
-All 3 sub-phases of Phase 17 are now done:
+All 4 sub-phases of Phase 17 are now done:
 
 | Sub-phase | Component | Status |
 |-----------|-----------|--------|
 | 17a | DNS response spoofing (zone poisoning) | ✅ |
 | 17b | DNS cache poisoning (TTL-based) | ✅ |
 | 17c | DNS security (dns-validate defense) | ✅ |
+| 17d | External DNS cache poisoning (Kaminsky-style) | ✅ |
 
 ### Current test summary
 
@@ -3938,3 +3939,77 @@ After Phase 17c:
 - **18 unit tests + 11 module tests = 29 tests, all passing**
 - 11 defenses registered (added dns-validate)
 - DNS poisoning attack and defense both demonstrated
+
+---
+
+## Phase 17d: External DNS Cache Poisoning (dns-spoof-ext)
+
+### What was done
+
+1. **`ironattack dns-spoof-ext`** — external tool that floods forged DNS responses via raw socket (Kaminsky-style brute-force)
+2. **DNS server response acceptance** — ironstack's DNS server now accepts incoming DNS responses (QR=1) and caches the answer IP
+3. **Defense integration** — `dns-validate` blocks external poisoning by validating against zone table
+4. **DNS response builder fix** — fixed malformed responses to `dig` (EDNS0 OPT record was being included in response)
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironattack/dns_spoof_ext.h` | Header for dns-spoof-ext subcommand |
+| `ironattack/dns_spoof_ext.c` | External DNS cache poisoning tool (flood mode) |
+| `demos/demo.30.dns-spoof-ext.md` | Self-contained demo |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironattack/main.c` | Added `dns-spoof-ext` subcommand dispatch + help text |
+| `ironattack/CMakeLists.txt` | Added `dns_spoof_ext.c` to build |
+| `ironapps/dns_server.c` | Added QR=1 response handling (cache incoming responses via `dns_cache_add_secure()`); fixed `dns_build_response()` to skip EDNS0 OPT records and set proper flags (RD=1, RA=1) |
+| `DEMO.md` | Added demo.30 entry, dns-spoof-ext command, dns-validate defense |
+| `study.md` | Added Phase 17d section, updated sub-phase count to 4 |
+
+### How it works
+
+**Attack flow:**
+1. `dns-spoof-ext` opens IPPROTO_RAW socket bound to TAP interface
+2. Crafts forged DNS responses with random transaction IDs
+3. Source IP spoofed as upstream DNS (8.8.8.8) to look legitimate
+4. Sends to ironstack's DNS server (port 53)
+5. ironstack receives UDP on port 53, checks QR flag:
+   - QR=0 → normal query (lookup zone, respond)
+   - QR=1 → treat as upstream response (parse answer, cache via `dns_cache_add_secure()`)
+6. Without defense: cache poisoned with attacker's IP
+7. With `dns-validate`: `dns_cache_add_secure()` checks zone table, blocks mismatch
+
+**DNS response builder fix:**
+- `dig` sends EDNS0 OPT pseudo-RR in the additional section of queries
+- Old code copied the entire query (including OPT) as response base → `dig` got confused
+- Fix: only copy header + question section, explicitly set ARCOUNT=0, NSCOUNT=0
+- Also set flags to 0x8580 (QR=1, AA=1, RD=1, RA=1) so `dig` parses correctly
+
+### Verified results
+
+```
+# Attack without defense:
+sudo ./ironattack/ironattack dns-spoof-ext --domain ironnet.local --fake-ip 10.0.99.1 --target 10.0.1.1 --count 50
+→ ironstack logs: "Received DNS response: ironnet.local -> 10.0.99.1 (caching)" × 50
+→ dns cache shows: ironnet.local -> 10.0.99.1 (TTL: 298s)
+
+# Attack with defense:
+ironctl> defense dns-validate enable
+→ dns cache shows: (empty) — all 50 attempts blocked
+→ audit log: "DNS cache poison blocked"
+
+# dig now works correctly:
+dig @10.0.1.1 ironnet.local +short
+→ 10.0.1.1
+```
+
+### Current test summary
+
+After Phase 17d:
+- **18 unit tests + 11 module tests = 29 tests, all passing**
+- ironattack has 10 subcommands (added dns-spoof-ext)
+- External DNS cache poisoning demonstrated and defended
+- `dig` responses now properly formatted (EDNS0 fix)

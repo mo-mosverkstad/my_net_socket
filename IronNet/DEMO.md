@@ -35,6 +35,7 @@ All demos are in the `demos/` folder. Each file is fully self-contained — it i
 | [demo.27.dns-spoof.md](demos/demo.27.dns-spoof.md) | Phase 17a | DNS response spoofing — zone poisoning |
 | [demo.28.dns-cache-poison.md](demos/demo.28.dns-cache-poison.md) | Phase 17b | DNS cache poisoning with TTL expiry |
 | [demo.29.dns-security.md](demos/demo.29.dns-security.md) | Phase 17c | DNS security — blocking cache poisoning |
+| [demo.30.dns-spoof-ext.md](demos/demo.30.dns-spoof-ext.md) | Phase 17d | External DNS cache poisoning (Kaminsky-style) |
 
 ## Quick Build Reference
 
@@ -66,6 +67,8 @@ Commands:
   slowloris  --target <ip> --port <port> [--conns <n>] [--iface <name>]
   frag-attack --target <ip> [--overlap] [--tiny] [--iface <name>] [--count <n>]
   icmp-redirect --target <ip> --new-gw <ip> --orig-dst <ip> [--count <n>] [--iface <name>]
+  dns-spoof  --domain <name> --fake-ip <ip> --target <ip> [--count <n>] [--iface <name>]
+  dns-spoof-ext --domain <name> --fake-ip <ip> --target <ip> [--count <n>] [--iface <name>]
 ```
 
 ## Defense Commands
@@ -81,5 +84,6 @@ ironctl> defense urpf enable
 ironctl> defense conn-timeout 30
 ironctl> defense frag-strict enable
 ironctl> defense icmp-redirect-disable enable
+ironctl> defense dns-validate enable
 ironctl> tcp flush
 ```
