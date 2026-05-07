@@ -218,3 +218,9 @@ void arp_dump(void) {
                 g_arp_table[i].mac[4], g_arp_table[i].mac[5]);
     }
 }
+
+void arp_flush(void) {
+    memset(g_arp_table, 0, sizeof(g_arp_table));
+    g_arp_count = 0;
+    LOG_INF(MODULE, "ARP table flushed");
+}

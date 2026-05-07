@@ -249,6 +249,9 @@ static void cmd_arp_cli(int argc, char **argv) {
         printf("ARP entry added.\n");
     } else if (strcmp(argv[1], "show") == 0) {
         arp_dump();
+    } else if (strcmp(argv[1], "flush") == 0) {
+        arp_flush();
+        printf("ARP table flushed.\n");
     } else if (strcmp(argv[1], "spoof-test") == 0) {
         if (argc < 3) {
             printf("Usage: arp spoof-test <ip>\n");
@@ -258,6 +261,23 @@ static void cmd_arp_cli(int argc, char **argv) {
             printf("Simulating ARP spoof for %s (fake MAC 02:DE:AD:BE:EF:99)\n", argv[2]);
             arp_add_entry(ip, fake_mac);
         }
+    } else if (strcmp(argv[1], "flood-test") == 0) {
+        /* arp flood-test [count] — fill ARP table with random entries */
+        int count = 200;
+        if (argc >= 3) count = atoi(argv[2]);
+        printf("MAC flood simulation: injecting %d random ARP entries...\n", count);
+        int added = 0;
+        for (int i = 0; i < count; i++) {
+            uint32_t fake_ip = iron_htonl(0xC0A80A00 | (i & 0xFFFF)); /* 192.168.10.x */
+            uint8_t fake_mac[6] = {0x02, 0xAA,
+                (uint8_t)((i >> 8) & 0xFF), (uint8_t)(i & 0xFF),
+                (uint8_t)(rand() & 0xFF), (uint8_t)(rand() & 0xFF)};
+            arp_add_entry(fake_ip, fake_mac);
+            added++;
+        }
+        printf("Injected %d random entries. ARP table should be full.\n", added);
+        printf("Legitimate entries (e.g., 10.0.1.2) may have been evicted.\n");
+        printf("Use 'show arp' to verify. Use 'arp flush' to clear the table after testing.\n");
     } else {
         printf("Unknown: arp %s\n", argv[1]);
     }

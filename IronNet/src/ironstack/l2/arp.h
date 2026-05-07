@@ -38,5 +38,6 @@ void arp_add_entry(uint32_t ip, const uint8_t *mac);
 void arp_trust_add(uint32_t ip, const uint8_t *mac);
 void arp_timer_tick(void);
 void arp_dump(void);
+void arp_flush(void);
 
 #endif /* IRON_ARP_H */

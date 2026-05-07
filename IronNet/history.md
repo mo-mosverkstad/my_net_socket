@@ -4431,3 +4431,51 @@ Added 3 new unit tests to cover previously untested modules:
 After test coverage improvement:
 - **21 unit tests + 11 module tests = 32 tests, all passing**
 - Coverage gaps filled: covert detection, app servers, config parser
+
+---
+
+## Phase 20a: MAC Flooding Attack
+
+### What was done
+
+Implemented a MAC flooding attack tool (`ironattack mac-flood`) that sends packets with random source IPs to overflow the ARP/bridge MAC table, forcing the bridge into hub mode.
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironattack/mac_flood.h` | MAC flood subcommand header |
+| `ironattack/mac_flood.c` | Sends ICMP pings from random source IPs to fill ARP table |
+| `demos/demo.37.mac-flood.md` | Self-contained demo |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironattack/main.c` | Added `mac-flood` subcommand dispatch + help |
+| `ironattack/CMakeLists.txt` | Added `mac_flood.c` to build |
+| `DEMO.md` | Added demo.37 entry |
+| `build.md` | Updated ironattack description |
+| `test.md` | Updated ironattack list and demo count |
+
+### How it works
+
+1. Opens IPPROTO_RAW socket bound to TAP interface
+2. Sends ICMP echo requests from random source IPs (192.168.10.x)
+3. Each unique source IP causes ironstack to learn a new ARP entry
+4. ARP table (128 entries) overflows after ~128 unique sources
+5. Legitimate entries are evicted → traffic to those destinations is flooded
+6. Attacker on any port can now see all flooded traffic
+
+### Additional: `arp flush` and `arp flood-test` CLI commands
+
+Since ARP frames (ethertype 0x0806) cannot be sent via IPPROTO_RAW through TAP, the internal CLI provides:
+- `arp flood-test [count]` — directly fills ARP table with random entries (simulates MAC flood)
+- `arp flush` — clears all ARP entries (cleanup after testing)
+
+### Current test summary
+
+After Phase 20a:
+- **21 unit tests + 11 module tests = 32 tests, all passing**
+- ironattack has 13 subcommands (added mac-flood)
+- MAC flooding demonstrated via random source IP flooding
