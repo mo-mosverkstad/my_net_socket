@@ -3,6 +3,7 @@
 #include "exploit.h"
 #include "covert.h"
 #include "mac_flood.h"
+#include "stealth_scan.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,6 +28,7 @@ static void usage(void) {
     fprintf(stderr, "  exploit  --target <ip> [--mode crash|pattern|payload|fmtstr] [--size <n>]\n");
     fprintf(stderr, "  covert   --target <ip> --mode icmp|isn|dns|timing|counting|ipid --message <text> [--iface <name>]\n");
     fprintf(stderr, "  mac-flood --target <ip> [--iface <name>] [--count <n>] [--rate <pps>]\n");
+    fprintf(stderr, "  stealth-scan --target <ip> [--ports <list>] [--mode fin|xmas|null] [--iface <name>]\n");
     fprintf(stderr, "\nAll commands require sudo (raw socket access).\n");
 }
 
@@ -658,6 +660,8 @@ int main(int argc, char **argv) {
         return cmd_covert(argc - 2, argv + 2);
     } else if (strcmp(cmd, "mac-flood") == 0) {
         return cmd_mac_flood(argc - 2, argv + 2);
+    } else if (strcmp(cmd, "stealth-scan") == 0) {
+        return cmd_stealth_scan(argc - 2, argv + 2);
     } else if (strcmp(cmd, "--help") == 0 || strcmp(cmd, "-h") == 0) {
         usage();
         return 0;

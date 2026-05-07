@@ -4537,3 +4537,52 @@ After Phase 20b:
 - 13 defenses registered (added port-security)
 - ironattack has 13 subcommands
 - 38 demo files
+
+---
+
+## Phase 21a: Stealth Port Scanning (FIN, XMAS, NULL)
+
+### What was done
+
+Implemented three stealth port scanning techniques that evade stateless firewalls by using unusual TCP flag combinations:
+
+1. **FIN scan** (`--mode fin`) — sends TCP packet with only FIN flag (0x01)
+2. **XMAS scan** (`--mode xmas`) — sends FIN+PSH+URG flags (0x29, "Christmas tree")
+3. **NULL scan** (`--mode null`) — sends TCP packet with no flags (0x00)
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironattack/stealth_scan.h` | Stealth scan subcommand header |
+| `ironattack/stealth_scan.c` | FIN/XMAS/NULL scan with RST detection |
+| `demos/demo.39.stealth-scan.md` | Self-contained demo |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironattack/main.c` | Added `stealth-scan` subcommand dispatch + help |
+| `ironattack/CMakeLists.txt` | Added `stealth_scan.c` to build |
+| `DEMO.md` | Added demo.39 entry |
+| `build.md` | Updated ironattack description |
+| `test.md` | Updated ironattack list and demo count |
+
+### How it works
+
+1. Opens IPPROTO_RAW socket for sending + IPPROTO_TCP socket for receiving RST
+2. For each port: sends TCP packet with specified flags
+3. Waits 500ms for RST response
+4. RST received → port is CLOSED
+5. No response (timeout) → port is OPEN or FILTERED
+
+### Key insight
+
+RFC 793 says: "If port is closed, send RST. If open, silently drop unexpected segments." This is the inverse of SYN scanning — silence means open.
+
+### Current test summary
+
+After Phase 21a:
+- **21 unit tests + 11 module tests = 32 tests, all passing**
+- ironattack has 14 subcommands (added stealth-scan)
+- 39 demo files
