@@ -4689,3 +4689,68 @@ After Phase 22a:
 - **21 unit tests + 11 module tests = 32 tests, all passing**
 - ironattack has 16 subcommands (added session-hijack)
 - 41 demo files
+
+---
+
+## Phase 22b: Session Hijacking Defense
+
+### What was done
+
+Implemented two defenses against TCP session hijacking:
+
+1. **`tcp-strict-window`** — only accept data if seq exactly matches `rcv_nxt` (no window tolerance). Narrows attack surface from 65535 possible values to exactly 1.
+2. **`challenge-ack`** — when data with wrong seq is rejected, send a challenge ACK back. Legitimate client can respond; attacker (spoofed IP) cannot.
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironstack/l4/tcp.c` | Added strict window check + challenge ACK in ESTABLISHED data handler; added `audit.h` include |
+| `ironstack/security/defense.c` | Registered `tcp-strict-window` and `challenge-ack` defenses |
+| `tests/CMakeLists.txt` | Added `audit_stub.c` to test_tcp and test_l4_module |
+| `DEMO.md` | Added demo.42 entry |
+| `build.md` | Added two new defenses to list |
+| `test.md` | Updated defense list and demo count |
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `demos/demo.42.session-hijack-defense.md` | Self-contained demo |
+
+### How it works
+
+```c
+// In TCP ESTABLISHED state, data arrives with seq:
+if (defense_is_enabled("tcp-strict-window")) {
+    if (seq != conn->rcv_nxt) {
+        // BLOCK: seq doesn't match exactly
+        log_warning("possible hijack");
+        audit_log_event(...);
+        if (defense_is_enabled("challenge-ack")) {
+            tcp_send_segment(ACK with current seq/ack);  // challenge
+        }
+        break;  // DROP packet
+    }
+}
+// Only reaches here if seq == rcv_nxt (exact match)
+conn->rcv_nxt = seq + payload_len;  // accept data
+```
+
+### Phase 22 complete
+
+All phases (1-22) are now implemented:
+
+| Sub-phase | Component | Status |
+|-----------|-----------|--------|
+| 22a | TCP session hijacking attack | ✅ |
+| 22b | Session hijacking defense (strict window + challenge ACK) | ✅ |
+
+### Current test summary
+
+After Phase 22b:
+- **21 unit tests + 11 module tests = 32 tests, all passing**
+- 15 defenses registered (added tcp-strict-window, challenge-ack)
+- ironattack has 16 subcommands
+- 42 demo files
+- **All 22 phases complete**

@@ -7,6 +7,7 @@
 #include "../security/defense.h"
 #include "../security/covert_detect.h"
 #include "../irontrace/trace.h"
+#include "../ironmon/audit.h"
 
 #include <string.h>
 #include <time.h>
@@ -300,6 +301,23 @@ int tcp_input(uint32_t src_ip, uint32_t dst_ip,
             int hdr_len_tcp = tcp_get_header_len(hdr);
             int payload_len_tcp = len - hdr_len_tcp;
             if (payload_len_tcp > 0) {
+                /* Session hijacking defense: strict window check */
+                if (defense_is_enabled("tcp-strict-window")) {
+                    if (seq != conn->rcv_nxt) {
+                        LOG_WRN(MODULE, "TCP strict window: seq %u != rcv_nxt %u (possible hijack)",
+                                seq, conn->rcv_nxt);
+                        audit_log_event(AUDIT_TCP_INVALID_FLAGS, src_ip, dst_ip,
+                                       PROTO_TCP, sport, dport, "Session hijack blocked (strict window)");
+                        /* Challenge ACK: send ACK with current seq/ack to challenge the sender */
+                        if (defense_is_enabled("challenge-ack")) {
+                            tcp_send_segment(dst_ip, src_ip, dport, sport,
+                                             conn->snd_nxt, conn->rcv_nxt, TCP_FLAG_ACK);
+                            LOG_WRN(MODULE, "Challenge ACK sent to %08X:%u", src_ip, sport);
+                        }
+                        break; /* DROP the data packet */
+                    }
+                }
+
                 conn->rcv_nxt = seq + payload_len_tcp;
 
                 /* Send ACK */

@@ -130,6 +130,8 @@ Available defenses:
 - `dns-validate` — Validate DNS cache entries against authoritative zone table
 - `covert-detect` — Detect covert channels via entropy, timing, ISN, and DNS analysis
 - `port-security` — Limit number of MAC/ARP entries learned (blocks MAC flooding)
+- `tcp-strict-window` — Only accept TCP data with seq exactly matching rcv_nxt (blocks hijacking)
+- `challenge-ack` — Send challenge ACK when data with wrong seq arrives (exposes attacker)
 
 ### Enable debug logging
 
