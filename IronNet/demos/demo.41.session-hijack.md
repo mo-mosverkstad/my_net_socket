@@ -174,8 +174,8 @@ Note: Injection into SYN_RECV may not work (server expects ACK to complete hands
 
 ## Notes
 
-- IronNet uses predictable ISN (1000) — makes hijacking trivial for demonstration
-- Real systems use random ISNs (32-bit) — attacker must sniff or predict
-- The attacker needs to know: client IP, client port, current seq number
-- In practice, MITM position (Phase 16) provides all needed information
-- Phase 22b will implement defenses (challenge ACK, strict window)
+- IronNet's server uses ISN=1000, but the CLIENT (Linux's `nc`) uses a random ISN
+- `show tcp` displays the actual `rcv_nxt` — use THAT value for `--seq`, not 1007
+- The `snd_nxt=1007` is the server's sequence; `rcv_nxt` is what the server expects FROM the client
+- In practice, MITM position (Phase 16) provides all needed information to learn seq numbers
+- Phase 22b implements defenses (challenge ACK, strict window)
