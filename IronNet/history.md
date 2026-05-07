@@ -4586,3 +4586,51 @@ After Phase 21a:
 - **21 unit tests + 11 module tests = 32 tests, all passing**
 - ironattack has 14 subcommands (added stealth-scan)
 - 39 demo files
+
+---
+
+## Phase 21b: Decoy Scanning
+
+### What was done
+
+Implemented decoy scanning that hides the real scanner's IP among multiple spoofed source IPs, making it impossible for the target to identify the real attacker.
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironattack/decoy_scan.h` | Decoy scan subcommand header |
+| `ironattack/decoy_scan.c` | Sends SYN from real IP + decoy IPs in random order |
+| `demos/demo.40.decoy-scan.md` | Self-contained demo |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironattack/main.c` | Added `decoy-scan` subcommand dispatch + help |
+| `ironattack/CMakeLists.txt` | Added `decoy_scan.c` to build |
+| `DEMO.md` | Added demo.40 entry |
+| `build.md` | Updated ironattack description |
+| `test.md` | Updated ironattack list and demo count |
+
+### How it works
+
+1. Parse decoy IPs from `--decoys` option (up to 8)
+2. For each port: build array of all IPs (real + decoys)
+3. Shuffle the array (random order)
+4. Send SYN from each IP in the shuffled order
+5. Target sees SYN from N+1 sources — can't identify which is real
+
+### Phase 21 complete
+
+| Sub-phase | Component | Status |
+|-----------|-----------|--------|
+| 21a | FIN/XMAS/NULL stealth scans | ✅ |
+| 21b | Decoy scanning | ✅ |
+
+### Current test summary
+
+After Phase 21b:
+- **21 unit tests + 11 module tests = 32 tests, all passing**
+- ironattack has 15 subcommands (added decoy-scan)
+- 40 demo files
