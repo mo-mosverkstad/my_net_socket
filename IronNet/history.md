@@ -4634,3 +4634,58 @@ After Phase 21b:
 - **21 unit tests + 11 module tests = 32 tests, all passing**
 - ironattack has 15 subcommands (added decoy-scan)
 - 40 demo files
+
+---
+
+## Phase 22a: TCP Session Hijacking Attack
+
+### What was done
+
+Implemented a TCP session hijacking tool (`ironattack session-hijack`) that injects data into an established TCP connection by spoofing the client's IP and using the predicted sequence number.
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `ironattack/session_hijack.h` | Session hijack subcommand header |
+| `ironattack/session_hijack.c` | Crafts spoofed TCP data packet with ACK+PSH flags |
+| `demos/demo.41.session-hijack.md` | Self-contained demo |
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironattack/main.c` | Added `session-hijack` subcommand dispatch + help |
+| `ironattack/CMakeLists.txt` | Added `session_hijack.c` to build |
+| `DEMO.md` | Added demo.41 entry |
+| `build.md` | Updated ironattack description |
+| `test.md` | Updated ironattack list and demo count |
+
+### How it works
+
+1. Attacker knows: client IP, client port, current sequence number
+2. Crafts TCP packet: src=client (spoofed), seq=server's rcv_nxt, flags=ACK+PSH
+3. Payload contains attacker's injected data
+4. Server receives packet, checks seq == rcv_nxt → MATCH → accepts data
+5. Echo server echoes back injected data (proving acceptance)
+6. Server advances rcv_nxt → client's next real packet is rejected (desync)
+
+### Key difference from RST injection
+
+- RST injection (Phase 13c): KILLS the connection (destructive)
+- Session hijacking (Phase 22a): INJECTS data (constructive — attacker takes control)
+
+### IronNet's predictable ISN
+
+IronNet uses ISN=1000 for all connections, making sequence prediction trivial:
+- After handshake: client seq=1001, server seq=1001
+- After client sends N bytes: next expected seq = 1001 + N
+
+Real systems use random 32-bit ISNs — attacker must sniff (via MITM) or predict.
+
+### Current test summary
+
+After Phase 22a:
+- **21 unit tests + 11 module tests = 32 tests, all passing**
+- ironattack has 16 subcommands (added session-hijack)
+- 41 demo files

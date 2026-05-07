@@ -374,9 +374,9 @@ void tcp_dump(void) {
         tcp_conn_t *c = &g_tcp_conns[i];
         if (!c->active) continue;
         char src_buf[16], dst_buf[16];
-        LOG_INF(MODULE, "  %s:%u -> %s:%u  state=%s",
+        LOG_INF(MODULE, "  %s:%u -> %s:%u  state=%s  snd_nxt=%u rcv_nxt=%u",
                 iron_ip_to_str(c->src_ip, src_buf, sizeof(src_buf)), c->src_port,
                 iron_ip_to_str(c->dst_ip, dst_buf, sizeof(dst_buf)), c->dst_port,
-                tcp_state_name(c->state));
+                tcp_state_name(c->state), c->snd_nxt, c->rcv_nxt);
     }
 }

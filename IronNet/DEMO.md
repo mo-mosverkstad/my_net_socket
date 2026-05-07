@@ -46,6 +46,7 @@ All demos are in the `demos/` folder. Each file is fully self-contained — it i
 | [demo.38.port-security.md](demos/demo.38.port-security.md) | Phase 20b | Port security defense (MAC limit per port) |
 | [demo.39.stealth-scan.md](demos/demo.39.stealth-scan.md) | Phase 21a | Stealth port scanning (FIN, XMAS, NULL scans) |
 | [demo.40.decoy-scan.md](demos/demo.40.decoy-scan.md) | Phase 21b | Decoy scanning (hide real IP among fakes) |
+| [demo.41.session-hijack.md](demos/demo.41.session-hijack.md) | Phase 22a | TCP session hijacking (inject data into active connection) |
 
 ## Quick Build Reference
 
