@@ -129,6 +129,7 @@ Available defenses:
 - `mitm-detect` — Alert on ARP MAC flapping (possible MITM indicator)
 - `dns-validate` — Validate DNS cache entries against authoritative zone table
 - `covert-detect` — Detect covert channels via entropy, timing, ISN, and DNS analysis
+- `port-security` — Limit number of MAC/ARP entries learned (blocks MAC flooding)
 
 ### Enable debug logging
 

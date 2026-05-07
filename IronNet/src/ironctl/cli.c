@@ -532,6 +532,18 @@ int cli_execute(const char *line) {
             } else {
                 printf("Invalid timeout: %s\n", argv[2]);
             }
+        } else if (strncmp(argv[1], "port-security", 13) == 0 && argc >= 3) {
+            int max_macs = atoi(argv[2]);
+            if (max_macs > 0) {
+                arp_set_port_security_max(max_macs);
+                defense_enable("port-security");
+            } else if (strcmp(argv[2], "enable") == 0) {
+                defense_enable("port-security");
+            } else if (strcmp(argv[2], "disable") == 0) {
+                defense_disable("port-security");
+            } else {
+                printf("Usage: defense port-security <max-macs> | enable | disable\n");
+            }
         } else if (argc >= 3) {
             if (strcmp(argv[2], "enable") == 0)
                 defense_enable(argv[1]);

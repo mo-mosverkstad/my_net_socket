@@ -47,6 +47,7 @@ int defense_init(void) {
     defense_find_or_create("mitm-detect");
     defense_find_or_create("dns-validate");
     defense_find_or_create("covert-detect");
+    defense_find_or_create("port-security");
     LOG_INF(MODULE, "Defense module initialized (%d defenses registered)", g_defense_count);
     return 0;
 }

@@ -15,6 +15,7 @@
 
 static arp_entry_t g_arp_table[ARP_TABLE_MAX];
 static int g_arp_count = 0;
+static int g_port_security_max = 32; /* default max MACs when port-security enabled */
 
 /* --- ARP Inspection: trusted IP-MAC bindings --- */
 #define ARP_TRUST_MAX 32
@@ -77,6 +78,17 @@ void arp_add_entry(uint32_t ip, const uint8_t *mac) {
     }
 
     /* Add new entry */
+    /* Port security: limit total ARP entries when enabled */
+    if (defense_is_enabled("port-security")) {
+        if (g_arp_count >= g_port_security_max) {
+            char ip_buf[16];
+            LOG_WRN(MODULE, "Port security: ARP entry BLOCKED for %s (table at limit %d)",
+                    iron_ip_to_str(ip, ip_buf, sizeof(ip_buf)), g_port_security_max);
+            audit_log_event(AUDIT_ARP_ANOMALY, ip, 0, 0, 0, 0, "Port security - MAC flood blocked");
+            return;
+        }
+    }
+
     if (g_arp_count >= ARP_TABLE_MAX) {
         /* Overwrite oldest */
         int oldest = 0;
@@ -223,4 +235,9 @@ void arp_flush(void) {
     memset(g_arp_table, 0, sizeof(g_arp_table));
     g_arp_count = 0;
     LOG_INF(MODULE, "ARP table flushed");
+}
+
+void arp_set_port_security_max(int max) {
+    g_port_security_max = max;
+    LOG_INF(MODULE, "Port security max MACs set to %d", max);
 }

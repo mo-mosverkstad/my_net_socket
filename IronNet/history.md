@@ -4479,3 +4479,61 @@ After Phase 20a:
 - **21 unit tests + 11 module tests = 32 tests, all passing**
 - ironattack has 13 subcommands (added mac-flood)
 - MAC flooding demonstrated via random source IP flooding
+
+---
+
+## Phase 20b: Port Security Defense
+
+### What was done
+
+Implemented port security defense that limits the number of ARP entries that can be learned, blocking MAC flooding attacks:
+
+1. **`defense port-security <max-macs>`** — enables port security with configurable limit (default 32)
+2. **`arp_add_entry()` check** — refuses new entries when table reaches the limit
+3. **Audit logging** — `AUDIT_ARP_ANOMALY` event when entry is blocked
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `ironstack/l2/arp.c` | Added `g_port_security_max`, port security check in `arp_add_entry()`, `arp_set_port_security_max()` |
+| `ironstack/l2/arp.h` | Added `arp_set_port_security_max()` declaration |
+| `ironstack/security/defense.c` | Registered `port-security` defense |
+| `ironctl/cli.c` | Added `defense port-security <max-macs>` command handler |
+| `DEMO.md` | Added demo.38 entry |
+| `build.md` | Added port-security to defense list |
+| `test.md` | Updated defense list and demo count |
+
+### Files created
+
+| File | Purpose |
+|------|---------|
+| `demos/demo.38.port-security.md` | Self-contained demo |
+
+### How it works
+
+```
+defense port-security 32:
+  → Enables defense, sets max to 32
+
+arp_add_entry() called with new IP:
+  → Is port-security enabled?
+  → Is g_arp_count >= g_port_security_max (32)?
+  → YES: BLOCK, log audit event, return without adding
+  → NO: allow, add entry normally
+```
+
+### Phase 20 complete
+
+| Sub-phase | Component | Status |
+|-----------|-----------|--------|
+| 20a | MAC flooding attack (arp flood-test + ironattack mac-flood) | ✅ |
+| 20b | Port security defense (limit ARP entries) | ✅ |
+
+### Current test summary
+
+After Phase 20b:
+- **21 unit tests + 11 module tests = 32 tests, all passing**
+- 13 defenses registered (added port-security)
+- ironattack has 13 subcommands
+- 38 demo files
